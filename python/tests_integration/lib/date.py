@@ -10,20 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import datetime
 
-from application.di.containers import get_main_providers
-from core.legacy.job.runners import JobFilterPredicate, TaskRunner, always_true
-from core.types import TaskID
-import dishka
-
-from jobs.worker.celery.worker import app
+import zoneinfo
 
 
-@app.task(track_started=True)
-def run_task(*, task_id: TaskID) -> None:
-    container_context = {JobFilterPredicate: always_true}
-
-    container = dishka.make_container(*get_main_providers(), context=container_context)
-    with container():
-        runner = container.get(TaskRunner)
-        runner.run(task_id=task_id)
+def now() -> datetime:
+    return datetime.now(zoneinfo.ZoneInfo("UTC"))

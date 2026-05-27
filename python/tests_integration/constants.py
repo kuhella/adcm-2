@@ -10,20 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
 
-from application.di.containers import get_main_providers
-from core.legacy.job.runners import JobFilterPredicate, TaskRunner, always_true
-from core.types import TaskID
-import dishka
+POSTGRESQL_MIN_IMAGE = "postgres:14"
+ADCM_DATA_VOLUME = ("adcm-data-vol", "/adcm/data", "rw")
 
-from jobs.worker.celery.worker import app
-
-
-@app.task(track_started=True)
-def run_task(*, task_id: TaskID) -> None:
-    container_context = {JobFilterPredicate: always_true}
-
-    container = dishka.make_container(*get_main_providers(), context=container_context)
-    with container():
-        runner = container.get(TaskRunner)
-        runner.run(task_id=task_id)
+# hard-wired and copied until general approach is defined
+API_V2_BUNDLES = Path(__file__).parents[1] / "api_v2" / "tests" / "bundles"

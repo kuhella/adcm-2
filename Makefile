@@ -13,21 +13,22 @@ build:
 
 unittests:
 	time docker run -d --rm -e POSTGRES_PASSWORD="postgres" --name postgres -p 5500:5432  postgres:14
-	time poetry install --no-root --with unittests
+	# installing with tests-integration for now (for simplicity)
+	time poetry install --no-root --with unittests --with tests-integration
 	DJANGO_SETTINGS_MODULE=adcm.settings_setups.test \
 	DB_HOST="localhost" DB_USER="postgres" DB_PORT="5500" DB_NAME="postgres" DB_PASS="postgres" \
 	time poetry run python/manage.py test python -v 2 --parallel --keepdb
 	docker stop postgres
 
 pretty:
-	poetry install --no-root --with lint
+	poetry install --no-root --with lint --with unittests --with tests-integration
 	poetry run ruff format $(PY_FILES)
 	poetry run ruff check --fix $(PY_FILES)
 	poetry run ruff format $(PY_FILES)
 	poetry run python dev/linters/license_checker.py --fix --folders $(PY_FILES) go
 
 lint:
-	poetry install --no-root --with lint
+	poetry install --no-root --with lint --with unittests --with tests-integration
 	poetry run ruff check $(PY_FILES)
 	poetry run ruff format --check $(PY_FILES)
 	poetry run pyright --project pyproject.toml
