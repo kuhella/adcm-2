@@ -37,19 +37,20 @@ from contextlib import suppress
 from dataclasses import dataclass
 from functools import cached_property
 from time import monotonic, sleep
-from typing import Any, Iterable
+from typing import Annotated, Any, Iterable
 from uuid import uuid4
 
 from celery.app.control import Control, Inspect
+from pydantic import BaseModel, Field
 
-from jobs.worker.celery.consul import settings as consul_settings
-from jobs.worker.celery.consul.client import ConsulKVClient, get_consul_kv_client
+from jobs.worker.celery.consul.client import ConsulKVClient
+from jobs.worker.celery.custom import ADCMCelery
 
 DEFAULT_TIMEOUT = 1.0
 
 
 @dataclass(frozen=True)
-class Command:
+class Command(BaseModel):
     """A control/inspect command published to Consul KV.
 
     The worker bootstep reads instances of this dataclass from
@@ -58,30 +59,24 @@ class Command:
 
     id: str
     method: str
-    arguments: dict[str, Any]
-    destination: tuple[str, ...] | None
-
-    def to_payload(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "method": self.method,
-            "arguments": dict(self.arguments),
-            "destination": list(self.destination) if self.destination else None,
-        }
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> Command:
-        dest = payload.get("destination")
-        return cls(
-            id=str(payload["id"]),
-            method=str(payload["method"]),
-            arguments=dict(payload.get("arguments") or {}),
-            destination=tuple(dest) if dest else None,
-        )
+    arguments: Annotated[dict[str, Any], Field(default_factory=dict)]
+    destination: Annotated[list[str] | None, Field(default=None)]
 
 
 class ConsulControl(Control):
     """Celery :class:`Control` replacement that broadcasts via Consul KV."""
+
+    def __init__(self, app):
+        if not isinstance(app, ADCMCelery):
+            raise TypeError("This worker step relies on ADCM Celery implementation")
+
+        super().__init__(app)
+        self.publisher = ConsulCommandPublisher(
+            client=app.consul_client,
+            collect_interval=app.conf.adcm_consul.kv_response_poll_interval,
+            command_prefix=app.conf.adcm_consul.kv_command_prefix,
+            response_prefix=app.conf.adcm_consul.kv_response_prefix,
+        )
 
     @cached_property
     def inspect(self):
@@ -106,8 +101,7 @@ class ConsulControl(Control):
         matcher=None,  # noqa: ARG002
         **extra_kwargs,  # noqa: ARG002
     ):
-        publisher = ConsulCommandPublisher(app=self.app, client=get_consul_kv_client())
-        return publisher.send(
+        return self.publisher.send(
             method=command,
             arguments=arguments or {},
             destination=tuple(destination) if destination else None,
@@ -131,15 +125,17 @@ class ConsulInspect(Inspect):
         )
 
 
+@dataclass(slots=True)
 class ConsulCommandPublisher:
     """
     Publishes a command to Consul KV and optionally collects per-worker
     responses.
     """
 
-    def __init__(self, *, app, client: ConsulKVClient) -> None:
-        self._app = app
-        self._client = client
+    client: ConsulKVClient
+    collect_interval: float
+    command_prefix: str
+    response_prefix: str
 
     def send(
         self,
@@ -158,8 +154,8 @@ class ConsulCommandPublisher:
             destination=destination,
         )
 
-        command_key = _command_key(command.id)
-        self._client.put(command_key, command.to_payload())
+        command_key = with_prefix(self.command_prefix, command.id)
+        self.client.put(command_key, command.model_dump(mode="json"))
 
         if not reply:
             return None
@@ -182,15 +178,14 @@ class ConsulCommandPublisher:
         timeout: float,
         limit: int | None,
     ) -> list[dict[str, Any]]:
-        response_prefix = _response_prefix(command_id)
+        response_prefix = with_prefix(self.response_prefix, command_id)
         expected = set(destination) if destination else None
-        interval = consul_settings.CONSUL_KV_RESPONSE_POLL_INTERVAL
 
         deadline = monotonic() + max(timeout, 0.0)
         seen: dict[str, Any] = {}
 
         while True:
-            for full_key, value in self._client.list_pairs(response_prefix).items():
+            for full_key, value in self.client.list_pairs(response_prefix).items():
                 hostname = full_key.rsplit("/", 1)[-1]
                 seen[hostname] = value
 
@@ -201,7 +196,7 @@ class ConsulCommandPublisher:
             if monotonic() >= deadline:
                 break
 
-            sleep(interval)
+            sleep(self.collect_interval)
 
         return [{hostname: value} for hostname, value in seen.items()]
 
@@ -209,21 +204,10 @@ class ConsulCommandPublisher:
         # Responses are removed after collection so that stale data does not
         # leak between calls; the command key is deleted only as a safety net
         # (the worker normally deletes it right after consuming).
-        for key, recurse in ((_response_prefix(command_id), True), (command_key, False)):
+        for key, recurse in ((with_prefix(self.response_prefix, command_id), True), (command_key, False)):
             with suppress(Exception):
-                self._client.delete(key, recurse=recurse)
+                self.client.delete(key, recurse=recurse)
 
 
-def _command_key(command_id: str) -> str:
-    prefix = consul_settings.normalize_prefix(consul_settings.CONSUL_KV_COMMAND_PREFIX or "")
-    return f"{prefix}{command_id}"
-
-
-def _response_prefix(command_id: str) -> str:
-    prefix = consul_settings.normalize_prefix(consul_settings.CONSUL_KV_RESPONSE_PREFIX or "")
-    return f"{prefix}{command_id}/"
-
-
-def response_key(command_id: str, hostname: str) -> str:
-    """Return the response KV path for ``(command_id, hostname)`` pair."""
-    return f"{_response_prefix(command_id)}{hostname}"
+def with_prefix(prefix: str, *path: str) -> str:
+    return f"{prefix}{'/'.join( path)}"

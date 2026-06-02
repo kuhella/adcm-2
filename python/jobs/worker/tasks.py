@@ -11,19 +11,15 @@
 # limitations under the License.
 
 
-from application.di.containers import get_main_providers
-from core.legacy.job.runners import JobFilterPredicate, TaskRunner, always_true
+from core.legacy.job.runners import TaskRunner
 from core.types import TaskID
 import dishka
 
+from jobs.worker.celery.custom import di_task
 from jobs.worker.celery.worker import app
 
 
-@app.task(track_started=True)
-def run_task(*, task_id: TaskID) -> None:
-    container_context = {JobFilterPredicate: always_true}
-
-    container = dishka.make_container(*get_main_providers(), context=container_context)
-    with container():
-        runner = container.get(TaskRunner)
-        runner.run(task_id=task_id)
+@app.task(bind=True, track_started=True)
+@di_task
+def run_task(*_, task_id: TaskID, task_runner: dishka.FromDishka[TaskRunner], **_kw) -> None:
+    task_runner.run(task_id=task_id)

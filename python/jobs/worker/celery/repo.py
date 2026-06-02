@@ -18,7 +18,6 @@ from sqlalchemy import create_engine
 
 from jobs.scheduler._types import CELERY_RUNNING_STATES, UTC, CeleryTaskState
 from jobs.scheduler.logger import logger
-from jobs.worker.celery import settings
 from jobs.worker.celery.models import Base, DBTables
 
 
@@ -57,29 +56,29 @@ def retrieve_alive_workers(threshold: datetime) -> set[str]:
 
 
 def update_worker_tasks(ids: set[int], status: CeleryTaskState) -> None:
-    ids = ", ".join(str(id_) for id_ in ids)
+    ids_as_str = ", ".join(map(str, ids))
 
     with connection.cursor() as cursor:
         cursor.execute(
-            f"UPDATE {DBTables.taskmeta} SET status = '{status}' WHERE id IN ({ids});"  # noqa: S608
+            f"UPDATE {DBTables.taskmeta} SET status = '{status}' WHERE id IN ({ids_as_str});"  # noqa: S608
         )
 
 
-def _init_builtin_tables() -> None:
+def _init_builtin_tables(db_url: str) -> None:
     session = SessionManager()
-    engine = session.get_engine(settings.db_url)
+    engine = session.get_engine(db_url)
     session.prepare_models(engine)
 
     logger.debug("Worker builtin tables initialized")
 
 
-def _init_custom_tables() -> None:
-    engine = create_engine(url=settings.db_url)
+def _init_custom_tables(db_url: str) -> None:
+    engine = create_engine(url=db_url)
     Base.metadata.create_all(engine, checkfirst=True)
 
     logger.debug("Worker custom tables initialized")
 
 
-def init_tables() -> None:
-    _init_builtin_tables()
-    _init_custom_tables()
+def init_tables(db_url: str) -> None:
+    _init_builtin_tables(db_url)
+    _init_custom_tables(db_url)

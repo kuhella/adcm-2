@@ -10,40 +10,69 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from json import JSONDecodeError
-from typing import Generator
-import os
-import json
+from dataclasses import dataclass
+from typing import Annotated
+
+from pydantic import AfterValidator, Field, SecretStr
+from pydantic_core import Url
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-def _get_env_variables(*args) -> Generator[str | None, None, None]:
-    for arg in args:
-        yield os.environ.get(arg.upper())
+def _normalize_kv_prefix(prefix: str) -> str:
+    """Normalize a KV prefix: strip leading slash, ensure trailing slash."""
+    return f"{prefix.strip('/')}/"
 
 
-def get_db_options() -> str:
-    db_options = os.getenv("DB_OPTIONS", "{}")
-    try:
-        parsed = json.loads(db_options)
-    except JSONDecodeError as json_error:
-        raise RuntimeError("Failed to decode DB_OPTIONS as JSON") from json_error
-    if not isinstance(parsed, dict):
-        raise RuntimeError("DB_OPTIONS should be dict")  # noqa: TRY004
+class EnvDBSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="db_")
 
-    return "&".join((f"{key}={value}" for key, value in parsed.items()))
+    user: str
+    # prefix looks to be ignored when alias is used
+    password: Annotated[SecretStr, Field(alias="db_pass")]
+    name: str
+    host: str
+    port: str
+
+    options: Annotated[dict, Field(default_factory=dict)]
 
 
-DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME = _get_env_variables("DB_USER", "DB_PASS", "DB_HOST", "DB_PORT", "DB_NAME")
-db_url = f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-if _options := get_db_options():
-    db_url = f"{db_url}?{_options}"
+class EnvWorkerSettings(BaseSettings):
+    # seconds
+    job_worker_celery_heartbeat_interval: Annotated[float, Field(default=5.0)]
 
-########################
-# Celery Worker settings
-########################
 
-broker_url = f"sqla+{db_url}"
-result_backend = f"db+{db_url}"
-result_extended = True
-broker_connection_retry_on_startup = True
-timezone = "UTC"
+class EnvConsulSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="consul_")
+
+    # server connection
+    url: Url
+    datacenter: Annotated[str | None, Field(default=None)]
+    cacert_file: Annotated[str | None, Field(default=None)]
+    acl_token: Annotated[SecretStr | None, Field(default=None)]
+
+    # requests
+    http_timeout: Annotated[float, Field(default=5.0)]
+    http_pool_size: Annotated[int, Field(default=10)]
+
+    # client (kv)
+    kv_command_prefix: Annotated[str, Field(default="celery/command"), AfterValidator(_normalize_kv_prefix)]
+    kv_response_prefix: Annotated[str, Field(default="celery/response"), AfterValidator(_normalize_kv_prefix)]
+    kv_command_poll_interval: Annotated[float, Field(default=1.0)]
+    kv_response_poll_interval: Annotated[float, Field(default=0.5)]
+
+
+@dataclass(slots=True)
+class CelerySettings:
+    # Connections
+    db_url: str
+    broker_url: str
+    result_backend: str
+
+    # ADCM specifics
+    adcm_worker: EnvWorkerSettings
+    adcm_consul: EnvConsulSettings
+
+    # Various
+    result_extended: bool = True
+    broker_connection_retry_on_startup: bool = True
+    timezone: str = "UTC"

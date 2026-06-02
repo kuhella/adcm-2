@@ -10,6 +10,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 
-JOB_WORKER_CELERY_HEARTBEAT_INTERVAL = float(os.environ.get("JOB_WORKER_CELERY_HEARTBEAT_INTERVAL", 5))  # in seconds
+import pytest
+
+from tests_integration.test_as_containers.cases import Smoke
+
+
+@pytest.fixture(scope="module")
+def adcm_main_env(database_env: dict, scheduler_celery_env: dict) -> dict:
+    return database_env | scheduler_celery_env
+
+
+@pytest.mark.skip("Need to see if this setup should work at all")
+class TestSmoke(Smoke):
+    ...

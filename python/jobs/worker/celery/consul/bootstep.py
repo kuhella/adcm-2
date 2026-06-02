@@ -24,13 +24,13 @@ from typing import Any, Iterable
 from celery import bootsteps
 from celery.utils.collections import AttributeDict
 from celery.utils.functional import pass1
-from celery.utils.nodenames import gethostname
 from celery.worker import control as worker_control
+from pydantic import ValidationError
 
 from jobs.scheduler.logger import logger
-from jobs.worker.celery.consul import settings as consul_settings
-from jobs.worker.celery.consul.client import ConsulKVClient, get_consul_kv_client
-from jobs.worker.celery.consul.control import Command, response_key
+from jobs.worker.celery.consul.client import ConsulKVClient
+from jobs.worker.celery.consul.control import Command, with_prefix
+from jobs.worker.celery.settings import EnvConsulSettings
 
 
 class ConsulListenerStep(bootsteps.StartStopStep):
@@ -49,30 +49,28 @@ class ConsulListenerStep(bootsteps.StartStopStep):
 
     requires = {"celery.worker.components:Timer"}
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.hostname = f"celery@{gethostname()}"
+    def __init__(self, parent, *args, **kwargs) -> None:
+        super().__init__(parent, *args, **kwargs)
+        self.hostname = parent.hostname
         self._tref = None
 
-    def start(self, work_controller) -> None:
-        if not consul_settings.is_enabled():
-            logger.debug("Consul control transport disabled; ConsulListenerStep will not start.")
-            return
+    def start(self, parent) -> None:
+        consul_settings: EnvConsulSettings = parent.app.conf.adcm_consul
 
-        interval = consul_settings.CONSUL_KV_COMMAND_POLL_INTERVAL
-        consumer = ConsulCommandConsumer(app=work_controller.app, hostname=self.hostname)
+        interval = consul_settings.kv_command_poll_interval
+        consumer = ConsulCommandConsumer(app=parent.app, hostname=self.hostname, client=parent.app.consul_client)
 
-        self._tref = work_controller.timer.call_repeatedly(
+        self._tref = parent.timer.call_repeatedly(
             secs=interval,
             fun=consumer.poll_once,
         )
         logger.info(
             f"Consul control listener started at {self.hostname} "
-            f"(interval={interval}s, prefix={consul_settings.CONSUL_KV_COMMAND_PREFIX})"
+            f"(interval={interval}s, prefix={consul_settings.kv_command_prefix})"
         )
 
-    def stop(self, work_controller) -> None:
-        _ = work_controller
+    def stop(self, parent) -> None:
+        _ = parent
         if self._tref is not None:
             self._tref.cancel()
             self._tref = None
@@ -84,16 +82,18 @@ class ConsulCommandConsumer:
     poll iteration.
     """
 
-    def __init__(self, *, app, hostname: str, client: ConsulKVClient | None = None) -> None:
+    def __init__(self, *, app, hostname: str, client: ConsulKVClient) -> None:
         self._app = app
         self._hostname = hostname
-        self._client = client or get_consul_kv_client()
+        self._client = client
         self._panel_state = _build_panel_state(app=app, hostname=hostname)
 
+        self._command_prefix = app.conf.adcm_consul.kv_command_prefix
+        self._response_prefix = app.conf.adcm_consul.kv_response_prefix
+
     def poll_once(self) -> None:
-        prefix = consul_settings.normalize_prefix(consul_settings.CONSUL_KV_COMMAND_PREFIX or "")
         try:
-            pairs = self._client.list_pairs(prefix)
+            pairs = self._client.list_pairs(self._command_prefix)
         except Exception:  # noqa: BLE001
             logger.error("Failed to list Consul control commands")
             return
@@ -103,13 +103,8 @@ class ConsulCommandConsumer:
 
     def _handle_one(self, *, key: str, payload: Any) -> None:
         try:
-            if not isinstance(payload, dict):
-                logger.warning(f"Skipping malformed Consul control command at {key!r}: {payload!r}")
-                self._safe_delete(key)
-                return
-
-            command = Command.from_payload(payload)
-        except (KeyError, ValueError, TypeError):
+            command = Command.model_validate(payload)
+        except ValidationError:
             logger.exception(f"Skipping unparsable Consul control command at {key!r}")
             self._safe_delete(key)
             return
@@ -139,7 +134,7 @@ class ConsulCommandConsumer:
             return {"error": repr(exc)}
 
     def _publish_response(self, *, command_id: str, result: dict[str, Any]) -> None:
-        key = response_key(command_id=command_id, hostname=self._hostname)
+        key = with_prefix(self._response_prefix, command_id, self._hostname)
         try:
             self._client.put(key, result)
         except Exception:  # noqa: BLE001

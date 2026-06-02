@@ -12,7 +12,6 @@
 
 from pathlib import Path
 from typing import Generator
-import re
 
 from faker import Faker
 from testcontainers.core.generic import DockerContainer
@@ -23,6 +22,7 @@ import requests
 
 from tests_integration.constants import ADCM_DATA_VOLUME, POSTGRESQL_MIN_IMAGE
 from tests_integration.lib.bundles import BundlePacker, SimpleBundlePacker
+from tests_integration.lib.celery import WORKER_ID_LOGS_REGEX, celery_command
 from tests_integration.lib.client import YAAClient
 from tests_integration.lib.container import db_env_from_container
 
@@ -59,7 +59,23 @@ def postgres() -> Generator[PostgresContainer, None, None]:
         yield pg
 
 
-# ADCM environment
+@pytest.fixture(scope="session")
+def consul() -> Generator[DockerContainer, None, None]:
+    container = DockerContainer("hashicorp/consul:2.0", ports=[8500]).waiting_for(
+        LogMessageWaitStrategy("Log data will now stream in as it occurs")
+    )
+
+    with container as consul:
+        yield consul
+
+
+@pytest.fixture(scope="session")
+def consul_env(consul: DockerContainer) -> dict:
+    c = consul.get_wrapped_container()
+    c.reload()
+    ip = c.attrs["NetworkSettings"]["IPAddress"]
+    port = 8500
+    return {"CONSUL_URL": f"http://{ip}:{port}"}
 
 
 @pytest.fixture(scope="session")
@@ -71,43 +87,67 @@ def database_env(postgres: PostgresContainer) -> dict:
     }
 
 
-@pytest.fixture(scope="session")
-def adcm(
-    adcm_image: str,
-    database_env: dict,
-) -> Generator[DockerContainer, None, None]:
-    extra_env = {"DEFAULT_JOB_EXECUTION_ENVIRONMENT": "celery"}
-    adcm_env = database_env | extra_env
+# ADCM related
 
-    container = DockerContainer(adcm_image, env=adcm_env, volumes=[ADCM_DATA_VOLUME], ports=[8000]).waiting_for(
-        CompositeWaitStrategy(
-            LogMessageWaitStrategy("Run main wsgi application"), LogMessageWaitStrategy("Run scheduler")
+
+@pytest.fixture(scope="session")
+def scheduler_celery_env() -> dict:
+    return {"DEFAULT_JOB_EXECUTION_ENVIRONMENT": "celery", "FEATURE_JOB_SCHEDULER": "new"}
+
+
+@pytest.fixture(scope="module")
+def adcm_main_env(database_env: dict) -> dict:
+    return database_env
+
+
+@pytest.fixture(scope="module")
+def adcm_main_container(adcm_image: str, adcm_main_env: dict) -> DockerContainer:
+    return (
+        DockerContainer(adcm_image, env=adcm_main_env, volumes=[ADCM_DATA_VOLUME], ports=[8000])
+        .waiting_for(
+            CompositeWaitStrategy(
+                LogMessageWaitStrategy("Run main wsgi application"), LogMessageWaitStrategy("Run scheduler")
+            )
         )
+        .with_envs(LOG_LEVEL="INFO")
     )
-    with container as adcm:
-        yield adcm
 
 
-@pytest.fixture(scope="session")
-def adcm_worker_celery(
-    adcm_image: str,
-    database_env: dict,
-) -> Generator[DockerContainer, None, None]:
-    container = DockerContainer(
-        adcm_image,
-        env=database_env,
-        volumes=[ADCM_DATA_VOLUME],
-        command="celery --workdir /adcm/python -A jobs.worker.celery.worker worker -l INFO",
-    ).waiting_for(LogMessageWaitStrategy(re.compile(r"celery@[A-z0-9]+ ready\.")))
-
-    with container as worker:
-        yield worker
+@pytest.fixture(scope="module")
+def adcm_main(adcm_main_container: DockerContainer) -> Generator[DockerContainer, None, None]:
+    with adcm_main_container as container:
+        yield container
 
 
-@pytest.fixture(scope="function")
-def client(faker: Faker, adcm: DockerContainer) -> Generator[YAAClient, None, None]:
+@pytest.fixture(scope="module")
+def adcm_worker_env(adcm_main_env: dict) -> dict:
+    return adcm_main_env
+
+
+@pytest.fixture(scope="module")
+def adcm_worker_container(adcm_image: str, adcm_worker_env: dict) -> DockerContainer:
+    return (
+        DockerContainer(
+            adcm_image,
+            env=adcm_worker_env,
+            volumes=[ADCM_DATA_VOLUME],
+            command=celery_command("worker -l INFO"),
+        )
+        .waiting_for(LogMessageWaitStrategy(WORKER_ID_LOGS_REGEX))
+        .with_envs(LOG_LEVEL="INFO")
+    )
+
+
+@pytest.fixture(scope="module")
+def adcm_worker(adcm_worker_container: DockerContainer) -> Generator[DockerContainer, None, None]:
+    with adcm_worker_container as container:
+        yield container
+
+
+@pytest.fixture(scope="module")
+def client(faker: Faker, adcm_main: DockerContainer) -> Generator[YAAClient, None, None]:
     with requests.Session() as session:
-        api_root = f"http://{adcm.get_container_host_ip()}:{adcm.get_exposed_port(8000)}/api/v2"
+        api_root = f"http://{adcm_main.get_container_host_ip()}:{adcm_main.get_exposed_port(8000)}/api/v2"
         client = YAAClient(session=session, api_root=api_root, faker=faker)
         client.login_as_admin()
         yield client

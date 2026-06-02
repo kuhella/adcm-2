@@ -15,24 +15,18 @@ Thin HTTP client for the Consul KV endpoints used by the custom Celery
 control/inspect transport.
 
 Recycle TCP/TLS connections instead of opening a new one for every operation.
-The client itself is a process-wide singleton;
-callers obtain it via :func:`get_consul_kv_client`.
 
 TLS and ACL options are picked up from environment/settings so that both
 ACL (token) and TLS (CA file) based hardening are supported out of the box.
 """
 
-from __future__ import annotations
 
-from base64 import b64decode, b64encode
-from threading import Lock
-from typing import Any, ClassVar
+from base64 import b64decode
+from typing import Any
 import json as jsonlib
 
 from requests import Session
 from requests.adapters import HTTPAdapter
-
-from jobs.worker.celery.consul import settings as consul_settings
 
 
 class ConsulKVError(RuntimeError):
@@ -168,65 +162,3 @@ def _decode_value(raw: str | None) -> Any | None:
 
 def _clean(key: str) -> str:
     return key.lstrip("/")
-
-
-__all__ = [
-    "ConsulKVClient",
-    "ConsulKVError",
-    "b64encode",
-    "get_consul_kv_client",
-    "reset_consul_kv_client",
-]
-
-
-_client_lock = Lock()
-
-
-class _ConsulClientRegistry:
-    _instance: ClassVar[ConsulKVClient | None] = None
-
-    @classmethod
-    def get(cls) -> ConsulKVClient:
-        if cls._instance is not None:
-            return cls._instance
-        with _client_lock:
-            if cls._instance is None:
-                cls._instance = _build_client()
-        return cls._instance
-
-    @classmethod
-    def reset(cls) -> None:
-        with _client_lock:
-            if cls._instance is not None:
-                cls._instance.close()
-                cls._instance = None
-
-
-def _build_client() -> ConsulKVClient:
-    if not consul_settings.CONSUL_URL:
-        raise ConsulKVError("CONSUL_URL is not set: Consul-based Celery control transport cannot be used.")
-
-    verify: str | bool = True
-    if consul_settings.CONSUL_CACERT_FILE:
-        verify = consul_settings.CONSUL_CACERT_FILE
-
-    return ConsulKVClient(
-        base_url=consul_settings.CONSUL_URL,
-        datacenter=consul_settings.CONSUL_DATACENTER,
-        token=consul_settings.CONSUL_ACL_TOKEN,
-        verify=verify,
-        timeout=consul_settings.CONSUL_HTTP_TIMEOUT,
-        pool_size=consul_settings.CONSUL_HTTP_POOL_SIZE,
-    )
-
-
-def get_consul_kv_client() -> ConsulKVClient:
-    """
-    Return the process-wide :class:`ConsulKVClient` instance.
-    """
-    return _ConsulClientRegistry.get()
-
-
-def reset_consul_kv_client() -> None:
-    """Drop the cached client (mostly useful for tests)."""
-    _ConsulClientRegistry.reset()

@@ -30,7 +30,6 @@ from django.db.transaction import atomic
 from jobs.scheduler import repo
 from jobs.scheduler._types import CELERY_RUNNING_STATES, UTC, CeleryTaskState, TaskShortInfo, WorkerID
 from jobs.scheduler.logger import logger
-from jobs.worker.celery.worker import app
 
 
 def set_status_on_success(status: ExecutionStatus):
@@ -105,6 +104,8 @@ def clear_concerns_on_error(func):
 
 
 def retrieve_celery_task_state(worker_id: WorkerID) -> CeleryTaskState:
+    from jobs.worker.celery.worker import app
+
     table = "celery_taskmeta"
     fields = "status, worker"
     condition = f"task_id = '{worker_id}'"

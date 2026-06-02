@@ -197,7 +197,8 @@ exclude = [
     "python/ansible_share/",
     "python/ansible_collections/",
     "python/api_v2/",
-    "python/jobs/",
+    "python/jobs/scheduler/",
+    "python/jobs/worker/celery/consul/",
     # common
     "**/tests",
     # technical
