@@ -70,9 +70,25 @@ CONSUL_KV_COMMAND_POLL_INTERVAL: float = _getfloat("CONSUL_KV_COMMAND_POLL_INTER
 CONSUL_KV_RESPONSE_POLL_INTERVAL: float = _getfloat("CONSUL_KV_RESPONSE_POLL_INTERVAL", 0.5)
 
 
+# Service discovery settings for the status service.
+STATUS_SERVICE_URL: str = (
+    _getenv("STATUS_SERVICE_URL", "http://localhost:8020/api/v1/") or "http://localhost:8020/api/v1/"
+)
+STATUS_SERVICE_NAME: str = _getenv("STATUS_SERVICE_NAME", "adcm-status-service") or "adcm-status-service"
+STATUS_SERVICE_ID: str = _getenv("STATUS_SERVICE_ID", "adcm-status-service") or "adcm-status-service"
+CONSUL_HEALTH_CHECK_TTL: float = _getfloat("CONSUL_HEALTH_CHECK_TTL", 30.0)
+CONSUL_CLIENT_CERT_FILE: str | None = _getenv("CONSUL_CLIENT_CERT_FILE")
+CONSUL_CLIENT_KEY_FILE: str | None = _getenv("CONSUL_CLIENT_KEY_FILE")
+
+
 def is_enabled() -> bool:
     """Return True if all mandatory settings for Consul-based control are set."""
     return bool(CONSUL_URL and CONSUL_KV_COMMAND_PREFIX and CONSUL_KV_RESPONSE_PREFIX)
+
+
+def is_discovery_enabled() -> bool:
+    """Return True if Consul service discovery is configured."""
+    return bool(CONSUL_URL)
 
 
 def normalize_prefix(prefix: str) -> str:

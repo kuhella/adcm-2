@@ -46,8 +46,24 @@ class EventTypes:
     UPDATE = "update_{}"
 
 
+def _resolve_status_service_base_url() -> str:
+    """
+    Resolve the status service base URL.
+
+    When Consul discovery is configured (CONSUL_URL set), query Consul for a
+    healthy instance.  Otherwise fall back to settings.API_URL (which defaults
+    to the old hardcoded http://localhost:8020/api/v1/).
+    """
+    try:
+        from jobs.worker.celery.consul.discovery import get_status_service_url
+
+        return get_status_service_url()
+    except ImportError:
+        return settings.API_URL
+
+
 def api_request(method: str, url: str, data: dict = None) -> Response | None:
-    url = urljoin(settings.API_URL, url)
+    url = urljoin(_resolve_status_service_base_url(), url)
     kwargs = {
         "headers": {
             "Content-Type": "application/json",
