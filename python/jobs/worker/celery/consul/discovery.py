@@ -208,6 +208,6 @@ def get_status_service_url() -> str:
             _cached_url_timestamp = monotonic()
             logger.info("Discovered status service at %s", url)
             return url
-        except ConsulDiscoveryError:
+        except Exception:  # noqa: BLE001
             logger.exception("Failed to discover status service from Consul, using fallback URL")
             return consul_settings.STATUS_SERVICE_URL

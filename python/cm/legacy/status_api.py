@@ -51,15 +51,20 @@ def _resolve_status_service_base_url() -> str:
     Resolve the status service base URL.
 
     When Consul discovery is configured (CONSUL_URL set), query Consul for a
-    healthy instance.  Otherwise fall back to settings.API_URL (which defaults
-    to the old hardcoded http://localhost:8020/api/v1/).
+    healthy instance.  Otherwise fall back to STATUS_SERVICE_URL env var
+    (default: http://localhost:8020/api/v1/).
+
+    The ImportError path handles the case where the consul discovery module
+    is not available (e.g. Django backend without celery dependencies).
     """
     try:
         from jobs.worker.celery.consul.discovery import get_status_service_url
 
         return get_status_service_url()
     except ImportError:
-        return settings.API_URL
+        import os
+
+        return os.environ.get("STATUS_SERVICE_URL") or settings.API_URL
 
 
 def api_request(method: str, url: str, data: dict = None) -> Response | None:
