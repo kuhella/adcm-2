@@ -71,11 +71,9 @@ CONSUL_KV_RESPONSE_POLL_INTERVAL: float = _getfloat("CONSUL_KV_RESPONSE_POLL_INT
 
 
 # Service discovery settings for the status service.
-STATUS_SERVICE_URL: str = (
-    _getenv("STATUS_SERVICE_URL", "http://localhost:8020/api/v1/") or "http://localhost:8020/api/v1/"
-)
-STATUS_SERVICE_NAME: str = _getenv("STATUS_SERVICE_NAME", "adcm-status-service") or "adcm-status-service"
-STATUS_SERVICE_ID: str = _getenv("STATUS_SERVICE_ID", "adcm-status-service") or "adcm-status-service"
+STATUS_SERVICE_URL: str = _getenv("STATUS_SERVICE_URL") or "http://localhost:8020/api/v1/"
+STATUS_SERVICE_NAME: str = _getenv("STATUS_SERVICE_NAME") or "adcm-status-service"
+STATUS_SERVICE_ID: str = _getenv("STATUS_SERVICE_ID") or "adcm-status-service"
 CONSUL_HEALTH_CHECK_TTL: float = _getfloat("CONSUL_HEALTH_CHECK_TTL", 30.0)
 CONSUL_CLIENT_CERT_FILE: str | None = _getenv("CONSUL_CLIENT_CERT_FILE")
 CONSUL_CLIENT_KEY_FILE: str | None = _getenv("CONSUL_CLIENT_KEY_FILE")
