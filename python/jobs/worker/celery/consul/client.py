@@ -11,15 +11,15 @@
 # limitations under the License.
 
 """
-Thin HTTP client for the Consul KV endpoints used by the custom Celery
-control/inspect transport.
+Low-level Consul HTTP client hierarchy.
 
-Recycle TCP/TLS connections instead of opening a new one for every operation.
-The client itself is a process-wide singleton;
-callers obtain it via :func:`get_consul_kv_client`.
+:class:`ConsulClient` is the base class that owns the HTTP session, connection
+pool, TLS/mTLS configuration, ACL token, and datacenter parameter.
 
-TLS and ACL options are picked up from environment/settings so that both
-ACL (token) and TLS (CA file) based hardening are supported out of the box.
+:class:`ConsulKVClient` extends it with KV-specific endpoints used by the
+custom Celery control/inspect transport.
+
+Callers obtain the process-wide KV singleton via :func:`get_consul_kv_client`.
 """
 
 from __future__ import annotations
@@ -35,20 +35,21 @@ from requests.adapters import HTTPAdapter
 from jobs.worker.celery.consul import settings as consul_settings
 
 
-class ConsulKVError(RuntimeError):
+class ConsulError(RuntimeError):
+    """Base error for Consul client operations."""
+
+
+class ConsulKVError(ConsulError):
     """Raised for any unexpected Consul KV HTTP response."""
 
 
-class ConsulKVClient:
+class ConsulClient:
     """
-    Minimal Consul KV client with pooled HTTP connections.
+    Base Consul HTTP client with pooled connections.
 
-    Only the endpoints required by the control/inspect transport are
-    exposed: :meth:`put`, :meth:`get`, :meth:`list_keys`, :meth:`list_pairs`
-    and :meth:`delete`.
+    Manages the shared HTTP session (connection pooling, TLS/mTLS, ACL token,
+    datacenter). Subclasses add endpoint-specific methods.
     """
-
-    _KV_PATH = "/v1/kv"
 
     def __init__(
         self,
@@ -57,6 +58,7 @@ class ConsulKVClient:
         datacenter: str | None = None,
         token: str | None = None,
         verify: str | bool = True,
+        cert: tuple[str, str] | None = None,
         timeout: float = 5.0,
         pool_size: int = 10,
     ) -> None:
@@ -68,11 +70,34 @@ class ConsulKVClient:
         if token:
             session.headers["X-Consul-Token"] = token
         session.verify = verify
-        # Reuse the same pool of TCP connections across all kv requests.
+        if cert:
+            session.cert = cert
         adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
         self._session = session
+
+    def close(self) -> None:
+        self._session.close()
+
+    def _query(self, **extra: str) -> dict[str, str]:
+        params: dict[str, str] = {}
+        if self._datacenter:
+            params["dc"] = self._datacenter
+        params.update(extra)
+        return params
+
+
+class ConsulKVClient(ConsulClient):
+    """
+    Consul KV client with pooled HTTP connections.
+
+    Only the endpoints required by the control/inspect transport are
+    exposed: :meth:`put`, :meth:`get`, :meth:`list_keys`, :meth:`list_pairs`
+    and :meth:`delete`.
+    """
+
+    _KV_PATH = "/v1/kv"
 
     def put(self, key: str, value: Any) -> None:
         """Store ``value`` at ``key``. ``value`` is json-encoded automatically."""
@@ -141,16 +166,6 @@ class ConsulKVClient:
                 f"Failed to DELETE consul kv {key!r}: status={response.status_code} body={response.text!r}"
             )
 
-    def close(self) -> None:
-        self._session.close()
-
-    def _query(self, **extra: str) -> dict[str, str]:
-        params: dict[str, str] = {}
-        if self._datacenter:
-            params["dc"] = self._datacenter
-        params.update(extra)
-        return params
-
 
 def _encode_value(value: Any) -> bytes:
     return jsonlib.dumps(value, ensure_ascii=False, default=str).encode("utf-8")
@@ -171,6 +186,8 @@ def _clean(key: str) -> str:
 
 
 __all__ = [
+    "ConsulClient",
+    "ConsulError",
     "ConsulKVClient",
     "ConsulKVError",
     "b64encode",
@@ -182,7 +199,7 @@ __all__ = [
 _client_lock = Lock()
 
 
-class _ConsulClientRegistry:
+class _ConsulKVClientRegistry:
     _instance: ClassVar[ConsulKVClient | None] = None
 
     @classmethod
@@ -191,7 +208,7 @@ class _ConsulClientRegistry:
             return cls._instance
         with _client_lock:
             if cls._instance is None:
-                cls._instance = _build_client()
+                cls._instance = _build_kv_client()
         return cls._instance
 
     @classmethod
@@ -202,7 +219,7 @@ class _ConsulClientRegistry:
                 cls._instance = None
 
 
-def _build_client() -> ConsulKVClient:
+def _build_kv_client() -> ConsulKVClient:
     if not consul_settings.CONSUL_URL:
         raise ConsulKVError("CONSUL_URL is not set: Consul-based Celery control transport cannot be used.")
 
@@ -210,11 +227,16 @@ def _build_client() -> ConsulKVClient:
     if consul_settings.CONSUL_CACERT_FILE:
         verify = consul_settings.CONSUL_CACERT_FILE
 
+    cert: tuple[str, str] | None = None
+    if consul_settings.CONSUL_CLIENT_CERT_FILE and consul_settings.CONSUL_CLIENT_KEY_FILE:
+        cert = (consul_settings.CONSUL_CLIENT_CERT_FILE, consul_settings.CONSUL_CLIENT_KEY_FILE)
+
     return ConsulKVClient(
         base_url=consul_settings.CONSUL_URL,
         datacenter=consul_settings.CONSUL_DATACENTER,
         token=consul_settings.CONSUL_ACL_TOKEN,
         verify=verify,
+        cert=cert,
         timeout=consul_settings.CONSUL_HTTP_TIMEOUT,
         pool_size=consul_settings.CONSUL_HTTP_POOL_SIZE,
     )
@@ -224,9 +246,9 @@ def get_consul_kv_client() -> ConsulKVClient:
     """
     Return the process-wide :class:`ConsulKVClient` instance.
     """
-    return _ConsulClientRegistry.get()
+    return _ConsulKVClientRegistry.get()
 
 
 def reset_consul_kv_client() -> None:
     """Drop the cached client (mostly useful for tests)."""
-    _ConsulClientRegistry.reset()
+    _ConsulKVClientRegistry.reset()

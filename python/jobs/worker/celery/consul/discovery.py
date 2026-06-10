@@ -11,15 +11,14 @@
 # limitations under the License.
 
 """
-Low-level Consul HTTP client for service discovery.
+Consul service discovery for the status service.
 
-Provides :class:`ConsulClient` which queries Consul's catalog/health APIs
-to resolve a service name into a connection URL.  Used by
-:func:`get_status_service_url` to discover the status service address at
-runtime when ``CONSUL_URL`` is set.
+Uses :class:`~jobs.worker.celery.consul.client.ConsulClient` (the shared base
+class) to query Consul's health API and resolve the status service URL.
 
-The client supports TLS and mTLS via CA cert, client cert, and client key
-file paths.
+:func:`get_status_service_url` is the public entry point — it transparently
+discovers the URL from Consul when ``CONSUL_URL`` is set, with a TTL-based
+cache, and falls back to ``STATUS_SERVICE_URL`` otherwise.
 """
 
 from __future__ import annotations
@@ -29,51 +28,22 @@ from time import monotonic
 from typing import ClassVar
 import logging
 
-from requests import Session
-from requests.adapters import HTTPAdapter
-
 from jobs.worker.celery.consul import settings as consul_settings
+from jobs.worker.celery.consul.client import ConsulClient, ConsulError
 
 logger = logging.getLogger(__name__)
 
 
-class ConsulDiscoveryError(RuntimeError):
+class ConsulDiscoveryError(ConsulError):
     """Raised when service discovery fails."""
 
 
-class ConsulClient:
+class ConsulServiceDiscoveryClient(ConsulClient):
     """
-    Minimal Consul HTTP client for service discovery.
+    Consul client specialized for service discovery.
 
-    Queries the ``/v1/health/service/<name>`` endpoint to find passing
-    instances of a registered service.
+    Queries ``/v1/health/service/<name>`` to find passing instances.
     """
-
-    def __init__(
-        self,
-        *,
-        base_url: str,
-        datacenter: str | None = None,
-        token: str | None = None,
-        verify: str | bool = True,
-        cert: tuple[str, str] | None = None,
-        timeout: float = 5.0,
-        pool_size: int = 4,
-    ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._datacenter = datacenter
-        self._timeout = timeout
-
-        session = Session()
-        if token:
-            session.headers["X-Consul-Token"] = token
-        session.verify = verify
-        if cert:
-            session.cert = cert
-        adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size)
-        session.mount("http://", adapter)
-        session.mount("https://", adapter)
-        self._session = session
 
     def discover_service(self, service_name: str) -> str:
         """
@@ -106,25 +76,15 @@ class ConsulClient:
 
         return f"{scheme}://{address}:{port}{base_path}"
 
-    def close(self) -> None:
-        self._session.close()
-
-    def _query(self, **extra: str) -> dict[str, str]:
-        params: dict[str, str] = {}
-        if self._datacenter:
-            params["dc"] = self._datacenter
-        params.update(extra)
-        return params
-
 
 _client_lock = Lock()
 
 
-class _ConsulClientRegistry:
-    _instance: ClassVar[ConsulClient | None] = None
+class _DiscoveryClientRegistry:
+    _instance: ClassVar[ConsulServiceDiscoveryClient | None] = None
 
     @classmethod
-    def get(cls) -> ConsulClient:
+    def get(cls) -> ConsulServiceDiscoveryClient:
         if cls._instance is not None:
             return cls._instance
         with _client_lock:
@@ -140,7 +100,7 @@ class _ConsulClientRegistry:
                 cls._instance = None
 
 
-def _build_discovery_client() -> ConsulClient:
+def _build_discovery_client() -> ConsulServiceDiscoveryClient:
     if not consul_settings.CONSUL_URL:
         raise ConsulDiscoveryError("CONSUL_URL is not set: Consul service discovery cannot be used.")
 
@@ -152,7 +112,7 @@ def _build_discovery_client() -> ConsulClient:
     if consul_settings.CONSUL_CLIENT_CERT_FILE and consul_settings.CONSUL_CLIENT_KEY_FILE:
         cert = (consul_settings.CONSUL_CLIENT_CERT_FILE, consul_settings.CONSUL_CLIENT_KEY_FILE)
 
-    return ConsulClient(
+    return ConsulServiceDiscoveryClient(
         base_url=consul_settings.CONSUL_URL,
         datacenter=consul_settings.CONSUL_DATACENTER,
         token=consul_settings.CONSUL_ACL_TOKEN,
@@ -162,14 +122,14 @@ def _build_discovery_client() -> ConsulClient:
     )
 
 
-def get_consul_client() -> ConsulClient:
-    """Return the process-wide :class:`ConsulClient` singleton."""
-    return _ConsulClientRegistry.get()
+def get_discovery_client() -> ConsulServiceDiscoveryClient:
+    """Return the process-wide :class:`ConsulServiceDiscoveryClient` singleton."""
+    return _DiscoveryClientRegistry.get()
 
 
-def reset_consul_client() -> None:
+def reset_discovery_client() -> None:
     """Drop the cached discovery client (mostly useful for tests)."""
-    _ConsulClientRegistry.reset()
+    _DiscoveryClientRegistry.reset()
 
 
 _cached_url: str | None = None
@@ -202,7 +162,7 @@ def get_status_service_url() -> str:
             return _cached_url
 
         try:
-            client = get_consul_client()
+            client = get_discovery_client()
             url = client.discover_service(consul_settings.STATUS_SERVICE_NAME)
             _cached_url = url
             _cached_url_timestamp = monotonic()
