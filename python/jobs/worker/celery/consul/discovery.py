@@ -13,8 +13,8 @@
 """
 Consul service discovery for the status service.
 
-Uses :class:`~jobs.worker.celery.consul.client.ConsulClient` (the shared base
-class) to query Consul's health API and resolve the status service URL.
+:class:`ConsulServiceDiscoveryClient` uses the shared :class:`ConsulClient`
+(injected) to query Consul's health API and resolve service URLs.
 
 :func:`get_status_service_url` is the public entry point — it transparently
 discovers the URL from Consul when ``CONSUL_URL`` is set, with a TTL-based
@@ -29,7 +29,7 @@ from typing import ClassVar
 import logging
 
 from jobs.worker.celery.consul import settings as consul_settings
-from jobs.worker.celery.consul.client import ConsulClient, ConsulError
+from jobs.worker.celery.consul.client import ConsulClient, ConsulError, get_consul_client
 
 logger = logging.getLogger(__name__)
 
@@ -38,25 +38,28 @@ class ConsulDiscoveryError(ConsulError):
     """Raised when service discovery fails."""
 
 
-class ConsulServiceDiscoveryClient(ConsulClient):
+class ConsulServiceDiscoveryClient:
     """
-    Consul client specialized for service discovery.
+    Consul service discovery client (uses a :class:`ConsulClient` for HTTP).
 
     Queries ``/v1/health/service/<name>`` to find passing instances.
     """
+
+    def __init__(self, client: ConsulClient) -> None:
+        self._client = client
 
     def discover_service(self, service_name: str) -> str:
         """
         Query Consul for healthy instances of ``service_name``.
 
-        Returns the URL (``http(s)://address:port/``) of the first passing instance.
+        Returns the URL (``http(s)://address:port/path``) of the first passing instance.
 
         Raises :class:`ConsulDiscoveryError` if no healthy instance is found.
         """
-        url = f"{self._base_url}/v1/health/service/{service_name}"
-        params = self._query(passing="true")
+        url = f"{self._client.base_url}/v1/health/service/{service_name}"
+        params = self._client.query_params(passing="true")
 
-        response = self._session.get(url, params=params, timeout=self._timeout)
+        response = self._client.session.get(url, params=params, timeout=self._client.timeout)
         if not response.ok:
             raise ConsulDiscoveryError(
                 f"Consul health query for {service_name!r} failed: status={response.status_code} body={response.text!r}"
@@ -77,49 +80,27 @@ class ConsulServiceDiscoveryClient(ConsulClient):
         return f"{scheme}://{address}:{port}{base_path}"
 
 
-_client_lock = Lock()
+_discovery_lock = Lock()
 
 
 class _DiscoveryClientRegistry:
+    """Process-wide singleton for :class:`ConsulServiceDiscoveryClient`."""
+
     _instance: ClassVar[ConsulServiceDiscoveryClient | None] = None
 
     @classmethod
     def get(cls) -> ConsulServiceDiscoveryClient:
         if cls._instance is not None:
             return cls._instance
-        with _client_lock:
+        with _discovery_lock:
             if cls._instance is None:
-                cls._instance = _build_discovery_client()
+                cls._instance = ConsulServiceDiscoveryClient(get_consul_client())
         return cls._instance
 
     @classmethod
     def reset(cls) -> None:
-        with _client_lock:
-            if cls._instance is not None:
-                cls._instance.close()
-                cls._instance = None
-
-
-def _build_discovery_client() -> ConsulServiceDiscoveryClient:
-    if not consul_settings.CONSUL_URL:
-        raise ConsulDiscoveryError("CONSUL_URL is not set: Consul service discovery cannot be used.")
-
-    verify: str | bool = True
-    if consul_settings.CONSUL_CACERT_FILE:
-        verify = consul_settings.CONSUL_CACERT_FILE
-
-    cert: tuple[str, str] | None = None
-    if consul_settings.CONSUL_CLIENT_CERT_FILE and consul_settings.CONSUL_CLIENT_KEY_FILE:
-        cert = (consul_settings.CONSUL_CLIENT_CERT_FILE, consul_settings.CONSUL_CLIENT_KEY_FILE)
-
-    return ConsulServiceDiscoveryClient(
-        base_url=consul_settings.CONSUL_URL,
-        datacenter=consul_settings.CONSUL_DATACENTER,
-        token=consul_settings.CONSUL_ACL_TOKEN,
-        verify=verify,
-        cert=cert,
-        timeout=consul_settings.CONSUL_HTTP_TIMEOUT,
-    )
+        with _discovery_lock:
+            cls._instance = None
 
 
 def get_discovery_client() -> ConsulServiceDiscoveryClient:
