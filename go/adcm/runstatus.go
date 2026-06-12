@@ -39,24 +39,18 @@ func main() {
 	}
 
 	// Register with Consul if CONSUL_URL is set.
-	var registrar *consul.Registrar
 	if cfg := consul.ConfigFromEnv(8020); cfg != nil {
-		registrar, err = consul.NewRegistrar(cfg)
-		if err != nil {
-			log.Printf("[consul] Failed to create registrar: %v", err)
+		registrar, regErr := consul.Register(cfg)
+		if regErr != nil {
+			log.Printf("[consul] Failed to register service: %v", regErr)
 		} else {
-			if regErr := registrar.Register(); regErr != nil {
-				log.Printf("[consul] Failed to register service: %v", regErr)
-			} else {
-				// Deregister on shutdown.
-				go func() {
-					sigCh := make(chan os.Signal, 1)
-					signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-					<-sigCh
-					registrar.Deregister()
-					os.Exit(0)
-				}()
-			}
+			go func() {
+				sigCh := make(chan os.Signal, 1)
+				signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+				<-sigCh
+				registrar.Deregister()
+				os.Exit(0)
+			}()
 		}
 	}
 

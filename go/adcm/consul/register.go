@@ -101,75 +101,72 @@ type checkDefinition struct {
 	DeregisterCriticalServiceAfter string `json:"DeregisterCriticalServiceAfter"`
 }
 
-// Registrar handles registering and maintaining a service in Consul.
+// Registrar handles maintaining a registered service in Consul.
 type Registrar struct {
 	cfg    *Config
 	client *http.Client
 	stopCh chan struct{}
 }
 
-// NewRegistrar creates a Registrar from the given config.
-func NewRegistrar(cfg *Config) (*Registrar, error) {
+// Register creates a Registrar, registers the service with Consul, and starts
+// a background goroutine that periodically passes the TTL health check.
+func Register(cfg *Config) (*Registrar, error) {
 	transport, err := buildTransport(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("build consul HTTP transport: %w", err)
 	}
 
-	return &Registrar{
+	r := &Registrar{
 		cfg: cfg,
 		client: &http.Client{
 			Transport: transport,
 			Timeout:   10 * time.Second,
 		},
 		stopCh: make(chan struct{}),
-	}, nil
-}
+	}
 
-// Register registers the service with Consul and starts a background
-// goroutine that periodically passes the TTL check.
-func (r *Registrar) Register() error {
 	address := getOutboundAddress()
 
 	reg := serviceRegistration{
-		ID:      r.cfg.ServiceID,
-		Name:    r.cfg.ServiceName,
+		ID:      cfg.ServiceID,
+		Name:    cfg.ServiceName,
 		Address: address,
-		Port:    r.cfg.ServicePort,
+		Port:    cfg.ServicePort,
 		Meta: map[string]string{
 			"scheme":    "http",
 			"base_path": "/api/v1/",
 		},
 		Check: checkDefinition{
-			CheckID:                        fmt.Sprintf("service:%s:ttl", r.cfg.ServiceID),
-			TTL:                            r.cfg.HealthTTL.String(),
-			DeregisterCriticalServiceAfter: (3 * r.cfg.HealthTTL).String(),
+			CheckID:                        fmt.Sprintf("service:%s:ttl", cfg.ServiceID),
+			TTL:                            cfg.HealthTTL.String(),
+			DeregisterCriticalServiceAfter: (3 * cfg.HealthTTL).String(),
 		},
 	}
 
 	body, err := json.Marshal(reg)
 	if err != nil {
-		return fmt.Errorf("marshal registration body: %w", err)
+		return nil, fmt.Errorf("marshal registration body: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/v1/agent/service/register", r.cfg.ConsulURL)
+	url := fmt.Sprintf("%s/v1/agent/service/register", cfg.ConsulURL)
 	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create registration request: %w", err)
+		return nil, fmt.Errorf("create registration request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	r.setAuth(req)
 
 	resp, err := r.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("consul register request: %w", err)
+		return nil, fmt.Errorf("consul register request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("consul register failed: status %d", resp.StatusCode)
+		return nil, fmt.Errorf("consul register failed: status %d", resp.StatusCode)
 	}
 
-	log.Printf("[consul] Registered service %s (id=%s) at %s:%d", r.cfg.ServiceName, r.cfg.ServiceID, address, r.cfg.ServicePort)
+	log.Printf("[consul] Registered service %s (id=%s) at %s:%d", cfg.ServiceName, cfg.ServiceID, address, cfg.ServicePort)
 
 	// Pass the initial TTL check immediately
 	if err := r.passTTL(); err != nil {
@@ -179,10 +176,10 @@ func (r *Registrar) Register() error {
 	// Start background TTL updater
 	go r.ttlLoop()
 
-	return nil
+	return r, nil
 }
 
-// Deregister removes the service from Consul.
+// Deregister removes the service from Consul and stops the TTL goroutine.
 func (r *Registrar) Deregister() {
 	close(r.stopCh)
 
