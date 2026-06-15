@@ -63,16 +63,6 @@ func ConfigFromEnv(servicePort int) *Config {
 		}
 	}
 
-	serviceName := os.Getenv("STATUS_SERVICE_NAME")
-	if serviceName == "" {
-		serviceName = "adcm-status-service"
-	}
-
-	serviceID := os.Getenv("STATUS_SERVICE_ID")
-	if serviceID == "" {
-		serviceID = "adcm-status-service"
-	}
-
 	port := servicePort
 	if rawURL := os.Getenv("DEFAULT_ADCM_URL"); rawURL != "" {
 		if parsed, err := url.Parse(rawURL); err == nil {
@@ -91,8 +81,8 @@ func ConfigFromEnv(servicePort int) *Config {
 		CACertFile:     os.Getenv("CONSUL_CACERT_FILE"),
 		ClientCertFile: os.Getenv("CONSUL_CLIENT_CERT_FILE"),
 		ClientKeyFile:  os.Getenv("CONSUL_CLIENT_KEY_FILE"),
-		ServiceName:    serviceName,
-		ServiceID:      serviceID,
+		ServiceName:    getEnvOrDefault("STATUS_SERVICE_NAME", "adcm-status-service"),
+		ServiceID:      getEnvOrDefault("STATUS_SERVICE_ID", "adcm-status-service"),
 		ServicePort:    port,
 		HealthTTL:      time.Duration(ttl * float64(time.Second)),
 	}
