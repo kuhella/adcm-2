@@ -48,6 +48,7 @@ type Config struct {
 
 // ConfigFromEnv builds a Config from environment variables.
 // Returns nil if CONSUL_URL is not set (Consul registration disabled).
+// servicePort is used as fallback when DEFAULT_ADCM_URL does not specify a port.
 func ConfigFromEnv(servicePort int) *Config {
 	consulURL := os.Getenv("CONSUL_URL")
 	if consulURL == "" {
@@ -72,6 +73,17 @@ func ConfigFromEnv(servicePort int) *Config {
 		serviceID = "adcm-status-service"
 	}
 
+	port := servicePort
+	if rawURL := os.Getenv("DEFAULT_ADCM_URL"); rawURL != "" {
+		if parsed, err := url.Parse(rawURL); err == nil {
+			if portStr := parsed.Port(); portStr != "" {
+				if p, err := strconv.Atoi(portStr); err == nil {
+					port = p
+				}
+			}
+		}
+	}
+
 	return &Config{
 		ConsulURL:      strings.TrimRight(consulURL, "/"),
 		Datacenter:     os.Getenv("CONSUL_DATACENTER"),
@@ -81,7 +93,7 @@ func ConfigFromEnv(servicePort int) *Config {
 		ClientKeyFile:  os.Getenv("CONSUL_CLIENT_KEY_FILE"),
 		ServiceName:    serviceName,
 		ServiceID:      serviceID,
-		ServicePort:    servicePort,
+		ServicePort:    port,
 		HealthTTL:      time.Duration(ttl * float64(time.Second)),
 	}
 }
