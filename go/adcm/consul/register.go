@@ -24,6 +24,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -125,7 +126,7 @@ func Register(cfg *Config) (*Registrar, error) {
 		stopCh: make(chan struct{}),
 	}
 
-	address := getOutboundAddress()
+	address := discoverOwnAddress()
 
 	reg := serviceRegistration{
 		ID:      cfg.ServiceID,
@@ -281,8 +282,19 @@ func buildTransport(cfg *Config) (*http.Transport, error) {
 	return transport, nil
 }
 
-// getOutboundAddress returns the preferred outbound IP of this machine.
-func getOutboundAddress() string {
+// discoverOwnAddress returns the address to register in Consul.
+//
+// Priority:
+//  1. DEFAULT_ADCM_URL env — extract host from the URL.
+//  2. UDP dial to 8.8.8.8 — picks the preferred outbound IP.
+//  3. os.Hostname() as last resort.
+func discoverOwnAddress() string {
+	if rawURL := os.Getenv("DEFAULT_ADCM_URL"); rawURL != "" {
+		if parsed, err := url.Parse(rawURL); err == nil && parsed.Hostname() != "" {
+			return parsed.Hostname()
+		}
+	}
+
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		hostname, _ := os.Hostname()
