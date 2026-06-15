@@ -126,7 +126,7 @@ func Register(cfg *Config) (*Registrar, error) {
 		stopCh: make(chan struct{}),
 	}
 
-	address := discoverOwnAddress()
+	address := getEnvOrDefault("STATUS_SERVICE_ADDRESS", discoverOwnAddress())
 
 	reg := serviceRegistration{
 		ID:      cfg.ServiceID,
@@ -280,6 +280,15 @@ func buildTransport(cfg *Config) (*http.Transport, error) {
 
 	transport.TLSClientConfig = tlsConfig
 	return transport, nil
+}
+
+// getEnvOrDefault returns the value of the environment variable named by key,
+// or fallback if the variable is unset or empty.
+func getEnvOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 // discoverOwnAddress returns the address to register in Consul.
