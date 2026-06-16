@@ -9,19 +9,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from django.conf.urls import include
-from django.urls import path
-
-from adcm.views import ADCMVersions
-
-urlpatterns = [
-    path("social/", include("social_django.urls", namespace="social")),
-    path("auth/", include("rest_framework.urls", namespace="rest_framework")),
-    path("api/health/", include("health.urls")),
-    path("api/v2/", include(("api_v2.urls", "api_v2"), namespace="v2")),
-    path("versions/", ADCMVersions.as_view(), name="versions"),
-]
-
-handler500 = "adcm.views.server_error"
-handler404 = "adcm.views.page_not_found"
