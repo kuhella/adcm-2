@@ -44,7 +44,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "drf_spectacular",
     "drf_spectacular_sidecar",
-    "application",
+    "application.apps.ApplicationConfig",
 ]
 
 MIDDLEWARE = [
