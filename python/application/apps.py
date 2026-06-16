@@ -40,11 +40,9 @@ class ApplicationConfig(AppConfig):
 
     @staticmethod
     def _setup_consul() -> None:
-        from integrations.consul import setup_consul_service_registration  # noqa: PLC0415
+        from application.startup.consul import register_in_consul  # noqa: PLC0415
 
         try:
-            backend = setup_consul_service_registration()
-            if backend:
-                logger.info("Consul service registration completed successfully")
+            register_in_consul()
         except Exception:  # noqa: BLE001
             logger.exception("Failed to register ADCM in Consul")

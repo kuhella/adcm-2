@@ -17,8 +17,6 @@ from pathlib import Path
 from threading import Lock
 from typing import ClassVar
 from urllib.parse import urlparse
-import os
-import signal
 import socket
 import logging
 
@@ -45,7 +43,7 @@ class ConsulSettings:
     deregister_critical_service_after: str = "5m"
 
 
-def _get_container_id() -> str:
+def get_container_id() -> str:
     cgroup_path = Path("/proc/self/cgroup")
     if cgroup_path.exists():
         for line in cgroup_path.read_text().splitlines():
@@ -57,7 +55,7 @@ def _get_container_id() -> str:
     return hostname[:12] if len(hostname) >= 12 else hostname
 
 
-def _parse_host_port(url: str) -> tuple[str, int]:
+def parse_host_port(url: str) -> tuple[str, int]:
     parsed = urlparse(url)
     host = parsed.hostname or "127.0.0.1"
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
@@ -122,18 +120,12 @@ class ConsulBackend:
     def register_service(
         self,
         *,
+        service_id: str,
         adcm_url: str,
-        status_service_base_path: str | None = None,
+        adcm_uuid: str,
+        status_service_url: str,
     ) -> None:
-        container_id = _get_container_id()
-        service_id = f"adcm@{container_id}"
-        host, port = _parse_host_port(adcm_url)
-
-        adcm_uuid = os.getenv("ADCM_UUID", container_id)
-
-        meta: dict[str, str] = {}
-        if status_service_base_path:
-            meta["status_service_url"] = status_service_base_path
+        host, port = parse_host_port(adcm_url)
 
         payload: dict = {
             "ID": service_id,
@@ -141,7 +133,7 @@ class ConsulBackend:
             "Tags": ["adcm", "backend", adcm_uuid],
             "Address": host,
             "Port": port,
-            "Meta": meta,
+            "Meta": {"status_service_url": status_service_url},
             "Checks": [
                 {
                     "HTTP": f"{adcm_url.rstrip('/')}/api/health/ready",
@@ -190,56 +182,3 @@ class ConsulBackend:
             logger.exception("Exception during Consul deregistration")
         finally:
             self._service_id = None
-
-
-def build_consul_settings_from_env() -> ConsulSettings | None:
-    consul_url = os.getenv("CONSUL_URL")
-    if not consul_url:
-        return None
-
-    return ConsulSettings(
-        url=consul_url,
-        datacenter=os.getenv("CONSUL_DATACENTER"),
-        acl_token=os.getenv("CONSUL_ACL_TOKEN"),
-        cacert_file=os.getenv("CONSUL_CACERT_FILE"),
-        client_cert_file=os.getenv("CONSUL_CLIENT_CERT_FILE"),
-        client_key_file=os.getenv("CONSUL_CLIENT_KEY_FILE"),
-        health_check_interval=os.getenv("CONSUL_HEALTH_CHECK_INTERVAL", "10s"),
-        health_check_timeout=os.getenv("CONSUL_HEALTH_CHECK_TIMEOUT", "5s"),
-        deregister_critical_service_after=os.getenv("CONSUL_DEREGISTER_CRITICAL_SERVICE_AFTER", "5m"),
-    )
-
-
-def setup_consul_service_registration() -> ConsulBackend | None:
-    settings = build_consul_settings_from_env()
-    if settings is None:
-        return None
-
-    default_adcm_url = os.getenv("DEFAULT_ADCM_URL")
-    if not default_adcm_url:
-        raise RuntimeError("DEFAULT_ADCM_URL is mandatory when Consul registration is enabled (CONSUL_URL is set).")
-
-    backend = ConsulBackend.initialize(settings)
-    backend.register_service(
-        adcm_url=default_adcm_url,
-        status_service_base_path=os.getenv("STATUS_SERVICE_BASE_PATH"),
-    )
-
-    _register_shutdown_handlers(backend)
-
-    return backend
-
-
-def _register_shutdown_handlers(backend: ConsulBackend) -> None:
-    original_sigterm = signal.getsignal(signal.SIGTERM)
-    original_sigint = signal.getsignal(signal.SIGINT)
-
-    def _handle_shutdown(signum, frame):
-        backend.deregister_service()
-
-        original = original_sigterm if signum == signal.SIGTERM else original_sigint
-        if callable(original):
-            original(signum, frame)
-
-    signal.signal(signal.SIGTERM, _handle_shutdown)
-    signal.signal(signal.SIGINT, _handle_shutdown)
