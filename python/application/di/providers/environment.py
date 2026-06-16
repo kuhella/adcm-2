@@ -24,7 +24,7 @@ from core.files.secrets_provider import FSSecretsBackend
 from core.settings import Directories
 from core.types import CurrentADCMVersion
 from dishka import Provider, Scope, provide
-from integrations import vault
+from integrations import consul, vault
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import pydantic
 
@@ -39,7 +39,17 @@ class VaultSettings(BaseSettings):
     vault: vault.ClientSettings
 
 
+class ConsulSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_nested_delimiter="_", env_nested_max_split=1)
+
+    consul: consul.ClientSettings
+
+
 class VaultSecretsInitError(Exception):
+    ...
+
+
+class ConsulSettingsInitError(Exception):
     ...
 
 
@@ -104,6 +114,10 @@ class EnvironmentProvider(Provider):
         return parse_vault_settings_from_env().vault
 
     @provide
+    def consul_settings(self) -> consul.ClientSettings | None:
+        return parse_consul_settings_from_env()
+
+    @provide
     def secrets_backend(self, source: SecretsSource, directories: Directories) -> secrets.SecretsBackend:
         match source:
             case SecretsSource.FILE_SYSTEM:
@@ -156,3 +170,19 @@ def parse_vault_settings_from_env():
             prefix="Failed to retrieve vault settings from environment.\nSummary:\n",
         )
         raise VaultSecretsInitError(message) from None
+
+
+def parse_consul_settings_from_env() -> consul.ClientSettings | None:
+    # Consul integration is opt-in: without CONSUL_URL there is nothing to configure.
+    if not os.getenv("CONSUL_URL"):
+        return None
+
+    try:
+        # ignored, because pyright doesn't know about pydantic settings logic
+        return ConsulSettings().consul  # pyright: ignore[reportCallIssue]
+    except pydantic.ValidationError as e:
+        message = represent_missing_and_others_errors_without_description(
+            errors=e.errors(),
+            prefix="Failed to retrieve consul settings from environment.\nSummary:\n",
+        )
+        raise ConsulSettingsInitError(message) from None

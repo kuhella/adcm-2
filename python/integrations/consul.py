@@ -14,8 +14,8 @@
 Consul service registry integration for the ADCM backend.
 
 :class:`ConsulBackend` is a process-wide singleton that owns a pooled
-``requests.Session`` (so TCP/TLS connections are recycled) configured from
-environment variables. It supports ACL token authentication as well as TLS /
+``requests.Session`` (so TCP/TLS connections are recycled) built from
+:class:`ClientSettings`. It supports ACL token authentication as well as TLS /
 mutual-TLS for ``https`` Consul endpoints, and exposes the agent endpoints
 required to register, deregister and health-check the ADCM service.
 """
@@ -24,71 +24,38 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Any, ClassVar, overload
-import os
+from typing import Any, ClassVar
 
 from requests import RequestException, Session
 from requests.adapters import HTTPAdapter
 
-DEFAULT_HEALTH_CHECK_INTERVAL = "10s"
-DEFAULT_HEALTH_CHECK_TIMEOUT = "5s"
-DEFAULT_DEREGISTER_CRITICAL_SERVICE_AFTER = "5m"
+SERVICE_NAME = "adcm"
 DEFAULT_HTTP_TIMEOUT = 5.0
 DEFAULT_POOL_SIZE = 10
 
-SERVICE_NAME = "adcm"
-
 
 class ConsulError(RuntimeError):
-    """Raised for configuration problems or unexpected Consul HTTP responses."""
+    """Raised for unexpected Consul HTTP responses or transport errors."""
 
 
-@dataclass(slots=True, frozen=True)
-class ConsulClientSettings:
-    """Connection credentials and health-check tuning for Consul."""
+@dataclass(slots=True)
+class ClientSettings:
+    # main
 
     url: str
     datacenter: str | None = None
     acl_token: str | None = None
 
     # TLS / mTLS
+
     cacert_file: str | None = None
     client_cert_file: str | None = None
     client_key_file: str | None = None
 
-    # health check tuning
-    health_check_interval: str = DEFAULT_HEALTH_CHECK_INTERVAL
-    health_check_timeout: str = DEFAULT_HEALTH_CHECK_TIMEOUT
-    deregister_critical_service_after: str = DEFAULT_DEREGISTER_CRITICAL_SERVICE_AFTER
+    # transport tuning
 
     http_timeout: float = DEFAULT_HTTP_TIMEOUT
     pool_size: int = DEFAULT_POOL_SIZE
-
-    def __post_init__(self) -> None:
-        if bool(self.client_cert_file) != bool(self.client_key_file):
-            message = "Both CONSUL_CLIENT_CERT_FILE and CONSUL_CLIENT_KEY_FILE must be specified for mTLS"
-            raise ConsulError(message)
-
-    @classmethod
-    def from_env(cls) -> ConsulClientSettings | None:
-        """Build settings from environment, returning ``None`` when Consul is disabled."""
-        url = _getenv("CONSUL_URL")
-        if not url:
-            return None
-
-        return cls(
-            url=url,
-            datacenter=_getenv("CONSUL_DATACENTER"),
-            acl_token=_getenv("CONSUL_ACL_TOKEN"),
-            cacert_file=_getenv("CONSUL_CACERT_FILE"),
-            client_cert_file=_getenv("CONSUL_CLIENT_CERT_FILE"),
-            client_key_file=_getenv("CONSUL_CLIENT_KEY_FILE"),
-            health_check_interval=_getenv("CONSUL_HEALTH_CHECK_INTERVAL", DEFAULT_HEALTH_CHECK_INTERVAL),
-            health_check_timeout=_getenv("CONSUL_HEALTH_CHECK_TIMEOUT", DEFAULT_HEALTH_CHECK_TIMEOUT),
-            deregister_critical_service_after=_getenv(
-                "CONSUL_DEREGISTER_CRITICAL_SERVICE_AFTER", DEFAULT_DEREGISTER_CRITICAL_SERVICE_AFTER
-            ),
-        )
 
 
 @dataclass(slots=True)
@@ -103,9 +70,9 @@ class ServiceRegistration:
     datacenter: str | None = None
     tags: list[str] = field(default_factory=list)
     meta: dict[str, str] = field(default_factory=dict)
-    check_interval: str = DEFAULT_HEALTH_CHECK_INTERVAL
-    check_timeout: str = DEFAULT_HEALTH_CHECK_TIMEOUT
-    deregister_critical_service_after: str = DEFAULT_DEREGISTER_CRITICAL_SERVICE_AFTER
+    check_interval: str = "10s"
+    check_timeout: str = "5s"
+    deregister_critical_service_after: str = "5m"
 
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -135,7 +102,7 @@ class ConsulBackend:
     _instance: ClassVar[ConsulBackend | None] = None
     _lock: ClassVar[Lock] = Lock()
 
-    def __init__(self, settings: ConsulClientSettings) -> None:
+    def __init__(self, settings: ClientSettings) -> None:
         self._settings = settings
         self._base_url = settings.url.rstrip("/")
         self._timeout = settings.http_timeout
@@ -152,11 +119,11 @@ class ConsulBackend:
         self._session = session
 
     @property
-    def settings(self) -> ConsulClientSettings:
+    def settings(self) -> ClientSettings:
         return self._settings
 
     @classmethod
-    def initialize(cls, settings: ConsulClientSettings) -> ConsulBackend:
+    def initialize(cls, settings: ClientSettings) -> ConsulBackend:
         """Create (or replace) the shared backend instance."""
         with cls._lock:
             if cls._instance is not None:
@@ -218,20 +185,3 @@ class ConsulBackend:
 
     def _query(self) -> dict[str, str]:
         return {"dc": self._settings.datacenter} if self._settings.datacenter else {}
-
-
-@overload
-def _getenv(name: str, default: str) -> str:
-    ...
-
-
-@overload
-def _getenv(name: str, default: None = ...) -> str | None:
-    ...
-
-
-def _getenv(name: str, default: str | None = None) -> str | None:
-    value = os.environ.get(name)
-    if value is None or value == "":
-        return default
-    return value

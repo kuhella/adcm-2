@@ -14,6 +14,10 @@
 Startup wiring that registers the ADCM backend as a Consul service and
 deregisters it on ``SIGINT`` / ``SIGTERM``.
 
+Connection credentials, the ADCM URL and the ADCM uuid are resolved from the DI
+container (the same approach used for the secrets backend during startup), while
+health-check tuning and ``STATUS_SERVICE_BASE_PATH`` come from Django settings.
+
 Registration is best-effort: any failure is logged and never aborts ADCM
 startup, so an unreachable Consul agent does not prevent the backend from
 serving requests.
@@ -29,7 +33,10 @@ import signal
 import socket
 import logging
 
-from integrations.consul import ConsulBackend, ConsulClientSettings, ServiceRegistration
+from core.scenarios.adcm import ADCMUUID, DefaultURL
+from dishka import Container
+from django.conf import settings
+from integrations.consul import ClientSettings, ConsulBackend, ServiceRegistration
 
 logger = logging.getLogger("adcm")
 
@@ -41,14 +48,9 @@ class ConsulConfigurationError(RuntimeError):
     """Raised when Consul-related configuration is inconsistent."""
 
 
-def ensure_default_adcm_url_when_consul_configured() -> None:
-    """``DEFAULT_ADCM_URL`` is mandatory once Consul registration is enabled (FR3)."""
-    if os.getenv("CONSUL_URL") and not os.getenv("DEFAULT_ADCM_URL"):
-        message = "DEFAULT_ADCM_URL is mandatory when ADCM is configured to run with Consul (CONSUL_URL is set)"
-        raise ConsulConfigurationError(message)
-
-
-def build_service_registration(*, settings: ConsulClientSettings, adcm_url: str, adcm_uuid: str) -> ServiceRegistration:
+def build_service_registration(
+    *, connection: ClientSettings, adcm_url: str, adcm_uuid: str | None
+) -> ServiceRegistration:
     parts = urlsplit(adcm_url)
     if not parts.scheme or not parts.hostname:
         raise ConsulConfigurationError(f"DEFAULT_ADCM_URL is not a valid URL: {adcm_url!r}")
@@ -57,43 +59,45 @@ def build_service_registration(*, settings: ConsulClientSettings, adcm_url: str,
     port = parts.port or _DEFAULT_PORT_BY_SCHEME.get(parts.scheme, 80)
     container_id = socket.gethostname()
 
-    status_service_base_path = os.getenv("STATUS_SERVICE_BASE_PATH", "")
-    meta = {"status_service_url": _join_url(base_url, status_service_base_path)}
-    if status_service_base_path:
-        meta["status_service_base_path"] = status_service_base_path
+    status_service_base_path = settings.STATUS_SERVICE_BASE_PATH
+    tags = ["adcm", "backend"]
+    if adcm_uuid:
+        tags.append(adcm_uuid)
 
     return ServiceRegistration(
         service_id=f"adcm@{container_id}",
         name="adcm",
-        datacenter=settings.datacenter,
-        tags=["adcm", "backend", adcm_uuid],
+        datacenter=connection.datacenter,
+        tags=tags,
         address=parts.hostname,
         port=port,
-        meta=meta,
+        meta={"status_service_url": _join_url(base_url, status_service_base_path)},
         health_check_url=_join_url(base_url, "/api/health/ready"),
-        check_interval=settings.health_check_interval,
-        check_timeout=settings.health_check_timeout,
-        deregister_critical_service_after=settings.deregister_critical_service_after,
+        check_interval=settings.CONSUL_HEALTH_CHECK_INTERVAL,
+        check_timeout=settings.CONSUL_HEALTH_CHECK_TIMEOUT,
+        deregister_critical_service_after=settings.CONSUL_DEREGISTER_CRITICAL_SERVICE_AFTER,
     )
 
 
-def register_adcm_in_consul() -> None:
+def register_adcm_in_consul(*, container: Container) -> None:
     """Initialize the :class:`ConsulBackend` singleton and register ADCM (best-effort)."""
-    settings = ConsulClientSettings.from_env()
-    if settings is None:
+    connection = container.get(ClientSettings | None)
+    if connection is None:
         return
 
-    adcm_url = os.getenv("DEFAULT_ADCM_URL")
-    if not adcm_url:
+    adcm_url = container.get(DefaultURL | None)
+    if adcm_url is None:
         # FR3 guarantees this can't happen for a correctly configured deployment,
         # but we keep registration defensive so it never raises during startup.
         logger.error("Skipping Consul registration: DEFAULT_ADCM_URL is not set")
         return
 
-    backend = ConsulBackend.initialize(settings)
+    backend = ConsulBackend.initialize(connection)
 
     try:
-        registration = build_service_registration(settings=settings, adcm_url=adcm_url, adcm_uuid=_get_adcm_uuid())
+        registration = build_service_registration(
+            connection=connection, adcm_url=str(adcm_url), adcm_uuid=container.get(ADCMUUID | None)
+        )
         backend.register(registration)
     except Exception:  # noqa: BLE001
         logger.exception("Failed to register ADCM in Consul")
@@ -132,12 +136,6 @@ def _install_deregistration_handlers(*, service_id: str) -> None:
         except ValueError:
             # signal handlers can only be installed in the main thread
             logger.warning("Could not install Consul deregistration handler for signal %s", signum)
-
-
-def _get_adcm_uuid() -> str:
-    from cm.models import ADCM  # noqa: PLC0415
-
-    return str(ADCM.objects.values_list("uuid", flat=True).get())
 
 
 def _join_url(base_url: str, path: str) -> str:

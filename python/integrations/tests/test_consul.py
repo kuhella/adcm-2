@@ -10,53 +10,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest import TestCase, mock
+from unittest import TestCase
 from unittest.mock import MagicMock
 
 from requests import RequestException
 
-from integrations.consul import (
-    ConsulBackend,
-    ConsulClientSettings,
-    ConsulError,
-    ServiceRegistration,
-)
-
-
-class TestConsulClientSettings(TestCase):
-    def test_from_env_disabled_without_url(self) -> None:
-        with mock.patch.dict("os.environ", {}, clear=True):
-            self.assertIsNone(ConsulClientSettings.from_env())
-
-    def test_from_env_parses_all_fields(self) -> None:
-        env = {
-            "CONSUL_URL": "https://consul.local:8501",
-            "CONSUL_DATACENTER": "dc1",
-            "CONSUL_ACL_TOKEN": "secret-token",
-            "CONSUL_CACERT_FILE": "/certs/ca.pem",
-            "CONSUL_CLIENT_CERT_FILE": "/certs/client.pem",
-            "CONSUL_CLIENT_KEY_FILE": "/certs/client.key",
-            "CONSUL_HEALTH_CHECK_INTERVAL": "15s",
-            "CONSUL_HEALTH_CHECK_TIMEOUT": "3s",
-            "CONSUL_DEREGISTER_CRITICAL_SERVICE_AFTER": "10m",
-        }
-        with mock.patch.dict("os.environ", env, clear=True):
-            settings = ConsulClientSettings.from_env()
-
-        self.assertIsNotNone(settings)
-        self.assertEqual(settings.url, "https://consul.local:8501")
-        self.assertEqual(settings.datacenter, "dc1")
-        self.assertEqual(settings.acl_token, "secret-token")
-        self.assertEqual(settings.cacert_file, "/certs/ca.pem")
-        self.assertEqual(settings.client_cert_file, "/certs/client.pem")
-        self.assertEqual(settings.client_key_file, "/certs/client.key")
-        self.assertEqual(settings.health_check_interval, "15s")
-        self.assertEqual(settings.health_check_timeout, "3s")
-        self.assertEqual(settings.deregister_critical_service_after, "10m")
-
-    def test_half_mtls_configuration_is_rejected(self) -> None:
-        with self.assertRaises(ConsulError):
-            ConsulClientSettings(url="https://consul.local:8501", client_cert_file="/certs/client.pem")
+from integrations.consul import ClientSettings, ConsulBackend, ConsulError, ServiceRegistration
 
 
 class TestServiceRegistration(TestCase):
@@ -68,7 +27,7 @@ class TestServiceRegistration(TestCase):
             health_check_url="http://10.92.40.33:8000/api/health/ready",
             datacenter="dc1",
             tags=["adcm", "backend", "uuid-1"],
-            meta={"status_service_url": "http://10.92.40.33:8000/status"},
+            meta={"status_service_url": "http://10.92.40.33:8000/status/api/v1"},
             check_interval="10s",
             check_timeout="5s",
             deregister_critical_service_after="5m",
@@ -82,7 +41,7 @@ class TestServiceRegistration(TestCase):
         self.assertEqual(payload["Tags"], ["adcm", "backend", "uuid-1"])
         self.assertEqual(payload["Address"], "10.92.40.33")
         self.assertEqual(payload["Port"], 8000)
-        self.assertEqual(payload["Meta"], {"status_service_url": "http://10.92.40.33:8000/status"})
+        self.assertEqual(payload["Meta"], {"status_service_url": "http://10.92.40.33:8000/status/api/v1"})
         self.assertEqual(len(payload["Checks"]), 1)
         check = payload["Checks"][0]
         self.assertEqual(check["HTTP"], "http://10.92.40.33:8000/api/health/ready")
@@ -104,7 +63,7 @@ class TestConsulBackend(TestCase):
     def setUp(self) -> None:
         ConsulBackend.reset()
         self.addCleanup(ConsulBackend.reset)
-        self.settings = ConsulClientSettings(
+        self.settings = ClientSettings(
             url="https://consul.local:8501/",
             datacenter="dc1",
             acl_token="token",
@@ -118,6 +77,12 @@ class TestConsulBackend(TestCase):
         self.assertEqual(backend._session.headers["X-Consul-Token"], "token")
         self.assertEqual(backend._session.verify, "/certs/ca.pem")
         self.assertEqual(backend._session.cert, ("/certs/client.pem", "/certs/client.key"))
+
+    def test_session_without_tls_verifies_by_default(self) -> None:
+        backend = ConsulBackend(ClientSettings(url="http://consul.local:8500"))
+        self.assertIs(backend._session.verify, True)
+        self.assertIsNone(backend._session.cert)
+        self.assertNotIn("X-Consul-Token", backend._session.headers)
 
     def test_singleton_lifecycle(self) -> None:
         self.assertIsNone(ConsulBackend.instance())

@@ -21,8 +21,16 @@ https://docs.djangoproject.com/en/1.11/howto/deployment/wsgi/
 
 import os
 
+from dishka import make_container
 from django.core.wsgi import get_wsgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "adcm.settings")
 
 application = get_wsgi_application()
+
+# Register ADCM in Consul once the WSGI app (and thus Django) is initialized.
+# A no-op unless Consul is configured; failures are logged, never fatal.
+from application.di.containers import get_main_providers  # noqa: E402
+from application.startup.consul import register_adcm_in_consul  # noqa: E402
+
+register_adcm_in_consul(container=make_container(*get_main_providers()))
