@@ -10,18 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from django.conf.urls import include
 from django.urls import path
 
-from adcm.views import ADCMVersions
+from api_v2.health.views import HealthReadyView
 
 urlpatterns = [
-    path("social/", include("social_django.urls", namespace="social")),
-    path("auth/", include("rest_framework.urls", namespace="rest_framework")),
-    path("api/v2/", include(("api_v2.urls", "api_v2"), namespace="v2")),
-    path("api/health/", include("api_v2.health.urls")),
-    path("versions/", ADCMVersions.as_view(), name="versions"),
+    path("ready", HealthReadyView.as_view(), name="health-ready"),
 ]
-
-handler500 = "adcm.views.server_error"
-handler404 = "adcm.views.page_not_found"
