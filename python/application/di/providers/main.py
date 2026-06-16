@@ -38,7 +38,7 @@ from core.bundle import VersionSupportStatus
 from core.dynamic_bundle.render import BundleRenderer
 from core.dynamic_bundle.types import ContextGathererI
 from core.files.local import LocalPathResolver
-from core.scenarios.adcm import DefaultURL, InitializeADCM, UpgradeADCM
+from core.scenarios.adcm import ADCMUUID, DefaultURL, InitializeADCM, UpgradeADCM
 from core.scenarios.config import ConfigScenarios
 from core.scenarios.wizard import FillWizardStepSpec
 from core.settings import Directories
@@ -194,6 +194,17 @@ class ScenariosProvider(Provider):
             return DefaultURL(adcm_url)
 
         return None
+
+    @provide
+    def adcm_uuid(self) -> ADCMUUID | None:
+        from cm.models import ADCM  # noqa: PLC0415
+
+        # ADCM is a singleton, but the row may be recreated on upgrade: limit to a single value.
+        adcm_uuid = ADCM.objects.values_list("uuid", flat=True).first()
+        if adcm_uuid is None:
+            return None
+
+        return ADCMUUID(str(adcm_uuid))
 
     initialize_adcm = provide(InitializeADCMLegacy, provides=InitializeADCM)
     upgrade_adcm = provide(UpgradeADCMLegacy, provides=UpgradeADCM)

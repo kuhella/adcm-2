@@ -15,8 +15,10 @@ from typing import Callable
 
 from cm.models import Bundle
 from core.bundle import ContractVersion, InstalledBundleVersion
+from core.scenarios.adcm import DefaultURL
 from dishka import Container, Scope
 from django.db import connection
+from integrations.consul import ClientSettings
 from packaging.version import Version
 import core.bundle
 
@@ -60,6 +62,16 @@ def check_contract_version_field_exists() -> CheckStatuses:
         return CheckStatuses.NO_FIELD
 
     return CheckStatuses.SUCCESS
+
+
+def ensure_default_adcm_url_when_consul_configured(*, container: Container, failure_exc: type[BaseException]) -> None:
+    """``DEFAULT_ADCM_URL`` is mandatory once Consul registration is enabled (FR3)."""
+    if container.get(ClientSettings | None) is None:
+        return
+
+    if container.get(DefaultURL | None) is None:
+        message = "DEFAULT_ADCM_URL is mandatory when ADCM is configured to run with Consul (CONSUL_URL is set)"
+        raise failure_exc(message)
 
 
 def check_adcm_start_is_allowed(
