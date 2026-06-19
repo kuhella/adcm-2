@@ -21,6 +21,7 @@ adcmuserconf="${adcmroot}/data/conf"
 adcmsecretfile="${adcmuserconf}/secret_key.txt"
 initreadyfile="/run/init.done"
 wsgisocketfile="/run/adcm.sock"
+adcmvenv="$adcmroot/.venv/bin"
 
 waitforinit() {
   while [ ! -f "${initreadyfile}" ]; do
