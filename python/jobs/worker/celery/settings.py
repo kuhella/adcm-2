@@ -70,7 +70,7 @@ class CelerySettings:
 
     # ADCM specifics
     adcm_worker: EnvWorkerSettings
-    adcm_consul: EnvConsulSettings
+    adcm_consul: EnvConsulSettings | None
 
     # Various
     result_extended: bool = True

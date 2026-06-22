@@ -31,7 +31,7 @@ from application.di.providers.main import (
     UtilsProvider,
     WizardProvider,
 )
-from application.di.providers.task_runner import TaskRunnerProvider
+from application.di.providers.task_runner import JobUseCaseProvider, TaskRunnerProvider
 
 
 def get_main_providers() -> tuple[Provider, ...]:
@@ -53,4 +53,5 @@ def get_main_providers() -> tuple[Provider, ...]:
         UtilsProvider(),
         WizardProvider(),
         AuditProvider(),
+        JobUseCaseProvider(),
     )

@@ -28,7 +28,7 @@ class SimpleBundlePacker(BundlePacker):
     target_dir: Path
 
     def pack_from_dir(self, source_dir: Path) -> Path:
-        bundle_file = self.target_dir / f"{source_dir.name}_{now().timestamp}.tar"
+        bundle_file = self.target_dir / f"{source_dir.name}_{now().timestamp()}.tar"
 
         with tarfile.open(bundle_file, "w") as tar:
             for file in source_dir.iterdir():

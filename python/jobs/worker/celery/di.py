@@ -10,17 +10,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterable
+from typing import Iterable, NewType
 
 from celery import Celery
 from celery.bootsteps import Step
 from dishka import Provider, Scope, provide
+from pydantic import ValidationError
 
 from jobs.worker.celery.consul.bootstep import ConsulListenerStep
 from jobs.worker.celery.consul.client import ConsulKVClient
 from jobs.worker.celery.consul.control import ConsulControl
 from jobs.worker.celery.custom import ADCMCelery, CustomWorkerStep
 from jobs.worker.celery.settings import CelerySettings, EnvConsulSettings, EnvDBSettings, EnvWorkerSettings
+
+NoConsul = NewType("NoConsul", None)
 
 
 class CeleryProvider(Provider):
@@ -44,7 +47,10 @@ class CeleryProvider(Provider):
             connection_str = f"{connection_str}?{options_str}"
 
         worker = EnvWorkerSettings()  # pyright: ignore[reportCallIssue]
-        consul = EnvConsulSettings()  # pyright: ignore[reportCallIssue]
+        try:
+            consul = EnvConsulSettings()  # pyright: ignore[reportCallIssue]
+        except ValidationError:
+            consul = None
 
         return CelerySettings(
             db_url=connection_str,
@@ -55,8 +61,12 @@ class CeleryProvider(Provider):
         )
 
     @provide
-    def consul_client(self, settings: CelerySettings) -> Iterable[ConsulKVClient]:
+    def consul_client(self, settings: CelerySettings) -> Iterable[ConsulKVClient | NoConsul]:
         consul_settings = settings.adcm_consul
+
+        if consul_settings is None:
+            yield NoConsul(None)
+            return
 
         verify: str | bool = True
         if consul_settings.cacert_file:
@@ -81,18 +91,23 @@ class CeleryProvider(Provider):
 
     @provide
     def celery(
-        self, providers: Iterable[Provider], celery_settings: CelerySettings, consul_client: ConsulKVClient
+        self, providers: Iterable[Provider], celery_settings: CelerySettings, consul_client: ConsulKVClient | NoConsul
     ) -> Celery:
+        control = None
+        worker_steps: list[type[Step]] = [CustomWorkerStep]
+
+        if consul_client:
+            worker_steps.append(ConsulListenerStep)
+            control = ConsulControl
+
         app = ADCMCelery(
-            control=ConsulControl,
+            control=control,
             adcm_di_providers=providers,
             adcm_settings=celery_settings,
             adcm_consul_client=consul_client,
         )
 
         app.autodiscover_tasks(packages=["jobs.worker"])
-
-        worker_steps: tuple[type[Step], ...] = (CustomWorkerStep, ConsulListenerStep)
 
         for step in worker_steps:
             app.steps["worker"].add(step)  # pyright: ignore[reportOptionalSubscript]

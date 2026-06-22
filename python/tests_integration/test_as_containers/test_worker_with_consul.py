@@ -25,7 +25,7 @@ def adcm_main_env(database_env: dict, scheduler_celery_env: dict, consul_env: di
 
 
 class TestSmoke(Smoke):
-    ...
+    pytestmark = [pytest.mark.usefixtures("adcm_worker")]
 
 
 @pytest.mark.usefixtures("consul")

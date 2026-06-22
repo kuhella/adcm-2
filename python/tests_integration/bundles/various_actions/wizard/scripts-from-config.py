@@ -11,15 +11,5 @@
 # limitations under the License.
 
 
-import pytest
-
-from tests_integration.test_as_containers.cases import Smoke
-
-
-@pytest.fixture(scope="module")
-def adcm_main_env(database_env: dict, scheduler_celery_env: dict) -> dict:
-    return database_env | scheduler_celery_env
-
-
-class TestSmoke(Smoke):
-    pytestmark = [pytest.mark.usefixtures("adcm_worker")]
+def main(ctx):
+    return ctx["cluster"]["config"]["wizard"]["scripts"]

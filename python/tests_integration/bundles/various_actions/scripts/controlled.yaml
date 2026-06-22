@@ -1,0 +1,36 @@
+---
+- &taskset
+  name: sleep or fail
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    current_tag: first
+
+  tags:
+    - first
+
+  tasks:
+    - debug:
+        msg: "Will sleep for {{ job.config.sleep }} seconds"
+    - name: sleep
+      when: "job.config.sleep > 0"
+      pause:
+        seconds: "{{ job.config.sleep }}"
+    - name: result
+      when: "job.config.fail_step == current_tag"
+      fail: 
+        msg: "Fail for this step is configured"
+
+- <<: *taskset
+  vars:
+    current_tag: second
+  tags:
+    - second
+
+- <<: *taskset
+  vars:
+    current_tag: third
+  tags:
+    - third

@@ -1,0 +1,9 @@
+---
+- name: fail
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  tasks:
+    - fail:
+        msg: "just fail"

@@ -1,0 +1,11 @@
+---
+- name: config_based_result
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  tasks:
+    - fail:
+        msg: "just fail"
+      when: "not cluster.config.job.should_pass"
+

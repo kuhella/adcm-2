@@ -15,6 +15,7 @@ from typing import Any, Protocol
 import os
 import signal
 
+from audit.alt.core import NameHalfSplitter
 from core.cluster import ClusterService
 from core.legacy.job.dto import JobUpdateDTO, TaskUpdateDTO
 from core.legacy.job.repo import ActionRepoInterface, JobRepoInterface
@@ -288,7 +289,7 @@ class JobSequenceRunner(TaskRunner):
         else:
             delete_task_flag_concern(task_id=task.id)
 
-        audit_task_finish(task=task, task_result=task_result, container=self._container)
+        audit_task_finish(task=task, task_result=task_result, name_splitter=self._container.get(NameHalfSplitter))
 
         finished_task = self._repo.get_task(id=task.id)
         if finished_task.action_process and isinstance(finished_task.action_process, CallingProcess):
