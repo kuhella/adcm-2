@@ -18,7 +18,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.action import JobSpec  # noqa
+from core.action import ExecutionStatus, JobSpec  # noqa
 from core.templates import Template
 from core.types import (
     ActionID,
@@ -36,19 +36,6 @@ from core.types import (
 T = TypeVar("T")
 V = TypeVar("V")
 CT = TypeVar("CT", bound=ADCMCoreType)
-
-
-# str is required for pydantic to correctly cast enum to value when calling `.dict`
-class ExecutionStatus(str, Enum):
-    REVOKED = "revoked"
-    CREATED = "created"
-    SCHEDULED = "scheduled"
-    QUEUED = "queued"
-    RUNNING = "running"
-    SUCCESS = "success"
-    FAILED = "failed"
-    ABORTED = "aborted"
-    BROKEN = "broken"
 
 
 # str is required for pydantic to correctly cast enum to value when calling `.dict`

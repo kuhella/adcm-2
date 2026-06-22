@@ -33,9 +33,9 @@ class CeleryTaskQueuer(TaskQueuer):
     env = TaskRunnerEnvironment.CELERY
 
     def queue(self, task_id: TaskID) -> WorkerInfo:
-        from jobs.worker.tasks import run_task
+        from jobs.worker.tasks import run_scheduled_task
 
-        result = run_task.delay(task_id=task_id)  # pyright: ignore [reportFunctionMemberAccess]
+        result = run_scheduled_task.delay(task_id=task_id)  # pyright: ignore [reportFunctionMemberAccess]
 
         return WorkerInfo(environment=self.env.value, worker_id=result.id)
 

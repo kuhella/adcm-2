@@ -15,5 +15,4 @@ from pathlib import Path
 POSTGRESQL_MIN_IMAGE = "postgres:14"
 ADCM_DATA_VOLUME = ("adcm-data-vol", "/adcm/data", "rw")
 
-# hard-wired and copied until general approach is defined
-API_V2_BUNDLES = Path(__file__).parents[1] / "api_v2" / "tests" / "bundles"
+INTEGRATION_BUNDLES = Path(__file__).parent / "bundles"

@@ -1,0 +1,133 @@
+- type: cluster
+  name: with_various_actions
+  version: 1
+  contract_version: "2.1"
+  venv: "2.16"
+
+  allow_maintenance_mode: yes
+
+  config:
+    - name: wizard
+      type: group
+      subs:
+        - name: stages
+          type: json
+          required: false
+        - name: scripts
+          type: json
+          required: false
+    - name: job
+      type: group
+      subs:
+        - name: should_pass
+          type: boolean
+          default: True
+
+  actions:
+    controlled_ansible: &ca_task
+      masking: {}
+      on_success:
+        state: task-success
+        multi_state:
+          set: ["task-success-ms"]
+          unset: ["task-fail-ms"]
+      on_fail:
+        multi_state: 
+          set: ["task-fail-ms"]
+          unset: ["task-success-ms"]
+
+
+      config: &ca_config
+        - name: sleep
+          type: integer
+          default: 1
+        - name: fail_step
+          type: variant
+          required: false
+          source:
+            type: inline
+            strict: true
+            value: ["first", "second", "third"]
+
+      scripts: &ca_scripts
+        - &caj
+          name: first
+          script: scripts/controlled.yaml
+          script_type: ansible
+          allow_to_terminate: yes
+          params:
+            ansible_tags: first
+          on_fail:
+            multi_state:
+              set: ["first-fail-ms"]
+              unset: ["second-fail-ms"]
+        - <<: *caj
+          name: second
+          params:
+            ansible_tags: second
+          on_fail:
+            state: second-fail-state
+            multi_state:
+              set: ["second-fail-ms"]
+              unset: ["first-fail-ms"]
+
+        - <<: *caj
+          name: third
+          params:
+            ansible_tags: third
+          on_fail: "third-fail-state"
+
+    controlled_ansible_with_task_on_fail:
+      <<: *ca_task
+      on_success:
+        state: task-success
+      on_fail: 
+        state: task-fail
+
+    controlled_ansible_with_task_no_on_success:
+      <<: *ca_task
+      on_success: null
+      on_fail: null
+
+    wizard_from_config_static_scripts:
+      states:
+        available: any
+        on_success: wizard-success
+        on_fail: wizard-fail
+
+      scripts: *ca_scripts
+      config: *ca_config
+
+      wizard_template:
+        engine:
+          type: jinja2
+        file:
+          path: wizard/stages-from-config.j2
+
+- name: with_mm_and_hc_acl
+  type: service
+  version: "1.0"
+
+  actions:
+    adcm_turn_on_maintenance_mode:
+      states:
+        available: any
+        on_success: turn-on-mm-success
+        on_fail: turn-on-mm-fail
+      scripts:
+        - name: perform
+          script: scripts/outcome-from-config.yaml
+          script_type: ansible
+
+    adcm_turn_off_maintenance_mode:
+      states:
+        available: any
+        on_success: turn-off-mm-success
+        on_fail: turn-off-mm-fail
+      scripts:
+        - name: perform
+          script: scripts/outcome-from-config.yaml
+          script_type: ansible
+
+  components:
+    first_component: {}

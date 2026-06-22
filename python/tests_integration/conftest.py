@@ -18,6 +18,7 @@ from testcontainers.core.generic import DockerContainer
 from testcontainers.core.wait_strategies import CompositeWaitStrategy, LogMessageWaitStrategy
 from testcontainers.postgres import PostgresContainer
 import pytest
+import psycopg
 import requests
 
 from tests_integration.constants import ADCM_DATA_VOLUME, POSTGRESQL_MIN_IMAGE
@@ -53,7 +54,7 @@ def adcm_image(request) -> str:
 # Non-ADCM environment
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def postgres() -> Generator[PostgresContainer, None, None]:
     with PostgresContainer(POSTGRESQL_MIN_IMAGE) as pg:
         yield pg
@@ -78,13 +79,25 @@ def consul_env(consul: DockerContainer) -> dict:
     return {"CONSUL_URL": f"http://{ip}:{port}"}
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def database_env(postgres: PostgresContainer) -> dict:
     return db_env_from_container(postgres) | {
         "DB_USER": postgres.username,
         "DB_PASS": postgres.password,
         "DB_NAME": postgres.dbname,
     }
+
+
+@pytest.fixture(scope="module")
+def pg_conn(database_env: dict, postgres: PostgresContainer) -> Generator[psycopg.Connection, None, None]:
+    with psycopg.connect(
+        host=postgres.get_container_host_ip(),
+        port=postgres.get_exposed_port(5432),
+        user=database_env["DB_USER"],
+        password=database_env["DB_PASS"],
+        dbname=database_env["DB_NAME"],
+    ) as conn:
+        yield conn
 
 
 # ADCM related

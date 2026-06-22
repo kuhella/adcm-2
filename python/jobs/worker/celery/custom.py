@@ -51,7 +51,7 @@ class ADCMCelery(Celery):
         control: type[Control] | None = None,
         adcm_di_providers: Iterable[dishka.Provider],
         adcm_settings: CelerySettings,
-        adcm_consul_client: ConsulKVClient,
+        adcm_consul_client: ConsulKVClient | None,
         **kwargs,
     ):
         super().__init__(*args, control=control, **kwargs)

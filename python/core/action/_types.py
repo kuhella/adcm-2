@@ -37,3 +37,16 @@ class JobSpec(BaseModel):
 
     # extra
     params: dict
+
+
+# str is required for pydantic to correctly cast enum to value when calling `.dict`
+class ExecutionStatus(str, Enum):
+    REVOKED = "revoked"
+    CREATED = "created"
+    SCHEDULED = "scheduled"
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    ABORTED = "aborted"
+    BROKEN = "broken"

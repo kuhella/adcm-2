@@ -1,0 +1,10 @@
+- type: provider
+  name: dummy
+  version: 1
+  venv: "2.16"
+  contract_version: "2.1"
+
+- type: host
+  name: dummy
+  version: 1
+

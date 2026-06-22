@@ -10,16 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from core.action.job import operations
 
-import pytest
-
-from tests_integration.test_as_containers.cases import Smoke
-
-
-@pytest.fixture(scope="module")
-def adcm_main_env(database_env: dict, scheduler_celery_env: dict) -> dict:
-    return database_env | scheduler_celery_env
-
-
-class TestSmoke(Smoke):
-    pytestmark = [pytest.mark.usefixtures("adcm_worker")]
+__all__ = [
+    "operations",
+]

@@ -34,8 +34,9 @@ from core.legacy.job.runners import (
 )
 from core.secrets import Secret, SecretsBackend
 from core.settings import Directories
-from dishka import Provider, Scope, from_context, provide
+from dishka import Provider, Scope, from_context, provide, provide_all
 from django.utils import timezone
+from use_cases.job.run import FinalizeTask, MarkTaskBroken, RunJob, SetTaskToRunning
 
 
 class SubprocessRunnerEnvironment:
@@ -95,3 +96,9 @@ class TaskRunnerProvider(Provider):
     environment = provide(SubprocessRunnerEnvironment, provides=RunnerEnvironment)
 
     runner = provide(JobSequenceRunner, provides=TaskRunner)
+
+
+class JobUseCaseProvider(Provider):
+    scope = Scope.APP
+
+    task_runner_steps = provide_all(SetTaskToRunning, RunJob, FinalizeTask, MarkTaskBroken)
