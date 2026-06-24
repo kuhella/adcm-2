@@ -70,6 +70,7 @@ COPY --from=python_builder /venv/2.16 /venv/2.16
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /venv/2.16 /venv/2.16
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /root/.ansible/collections /root/.ansible/collections
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/lib/python3.10 /usr/local/lib/python3.10
+COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/bin/python3.10 /usr/local/bin/python3.10
 COPY conf /adcm/conf
 COPY python/ansible_collections/arenadata/adcm/plugins /usr/share/ansible/plugins
 COPY python/ansible_collections/arenadata/adcm /root/.ansible/collections/ansible_collections/arenadata/adcm
