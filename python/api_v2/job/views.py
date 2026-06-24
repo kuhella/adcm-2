@@ -14,14 +14,15 @@
 from adcm.permissions import VIEW_JOBLOG_PERMISSION
 from adcm.serializers import EmptySerializer
 from audit.alt.api import audit_update
+from cm.errors import AdcmEx
 from cm.models import JobLog
+from dishka import FromDishka
 from django.contrib.contenttypes.models import ContentType
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from guardian.mixins import PermissionListMixin
 from rest_framework.decorators import action
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.status import (
     HTTP_200_OK,
@@ -29,6 +30,7 @@ from rest_framework.status import (
     HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
 )
+import core
 
 from api_v2.api_schema import DefaultParams, responses
 from api_v2.job.filters import JobFilter
@@ -89,8 +91,13 @@ class JobViewSet(PermissionListMixin, ListModelMixin, RetrieveModelMixin, ADCMGe
 
     @audit_update(name="{job_name} terminated", object_=detect_object_for_job).attach_hooks(on_collect=set_job_name)
     @action(methods=["post"], detail=True)
-    def terminate(self, request: Request, *args, **kwargs) -> Response:  # noqa: ARG001, ARG002
-        job = self.get_object()
-        job.cancel()
+    def terminate(self, *_, job_service: FromDishka[core.action.job.JobService], id: str, **__) -> Response:  # noqa: A002
+        try:
+            job_service.terminate_job(job_id=int(id))
+        except core.action.job.errors.JobValidationError as e:
+            raise AdcmEx("JOB_TERMINATION_ERROR", e.message) from None
+        except core.action.job.errors.JobTerminationError as e:
+            raise AdcmEx("NOT_ALLOWED_TERMINATION", e.message) from None
+        # todo cover not existing case
 
         return Response(status=HTTP_200_OK)

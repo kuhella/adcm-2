@@ -16,7 +16,7 @@ from typing import Any, TypeAlias
 
 from pydantic import BaseModel, Field
 
-from core.legacy.job.types import (
+from core.action import (
     AssociatedProcess,
     CallingProcess,
     ExecutionStatus,

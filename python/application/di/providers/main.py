@@ -100,8 +100,8 @@ class ConfigProvider(Provider):
 class JobProvider(Provider):
     scope = Scope.APP
 
-    repo = provide(JobRepo, provides=core.job.JobRepoI)
-    service = provide(core.job.JobService)
+    repo = provide(JobRepo, provides=core.action.job.JobRepoI)
+    service = provide(core.action.job.JobService)
 
 
 class WizardProvider(Provider):

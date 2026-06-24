@@ -27,3 +27,7 @@ def calculate_task_final_status(last_job_status: ExecutionStatus, task_is_aborte
     # most likely need to find a way to "detect" a broken case
 
     return ExecutionStatus.FAILED
+
+
+def is_terminatable_status(status: ExecutionStatus) -> bool:
+    return status in (ExecutionStatus.CREATED, ExecutionStatus.SCHEDULED, ExecutionStatus.RUNNING)

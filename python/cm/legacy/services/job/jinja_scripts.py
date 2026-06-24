@@ -13,9 +13,9 @@
 from pathlib import Path
 from typing import Generator
 
+from core.action import JobSpec, TaskMappingDelta
 from core.bundle import BundleParsingError
 from core.dynamic_bundle.types import ContextGathererI
-from core.legacy.job.types import JobSpec, TaskMappingDelta
 from core.types import TaskID
 
 from cm.errors import AdcmEx

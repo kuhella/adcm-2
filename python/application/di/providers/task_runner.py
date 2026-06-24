@@ -16,10 +16,8 @@ import logging
 
 from cm.legacy import status_api
 from cm.legacy.services.job.run import ExecutionTargetFactory
-from cm.legacy.services.job.run.repo import ActionRepoImpl, JobRepoImpl
 from cm.legacy.services.job.run.runners import EventNotifier, JobSequenceRunner, StatusServerInteractor
 from cm.legacy.services.status import notify
-from core.legacy.job.repo import ActionRepoInterface, JobRepoInterface
 from core.legacy.job.runners import (
     ADCMSettings,
     AnsibleSettings,
@@ -85,9 +83,6 @@ class TaskRunnerProvider(Provider):
     @provide
     def status_server(self) -> StatusServerInteractor:
         return notify
-
-    job_repo = provide(JobRepoImpl, provides=JobRepoInterface)
-    action_repo = provide(ActionRepoImpl, provides=ActionRepoInterface)
 
     job_factory = provide(ExecutionTargetFactory, provides=ExecutionTargetFactoryI)
     job_filter = from_context(JobFilterPredicate)

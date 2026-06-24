@@ -19,8 +19,8 @@ import time
 import signal
 import os.path
 
+from core.action import ScriptType
 from core.legacy.action.process.types import ProcessState, ProcessStepState
-from core.legacy.job.types import ScriptType
 from core.logs import Severity
 from core.types import ADCMCoreType, ADCMHostGroupType, Descriptor, ExtraActionTargetType
 from django.conf import settings

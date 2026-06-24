@@ -16,8 +16,8 @@ import logging
 from celery import Task, chain, signature
 from celery.canvas import Signature
 from celery.signals import after_setup_logger
+from core.action import ExecutionStatus
 from core.legacy.job.runners import RunnerEnvironment, TaskRunner
-from core.legacy.job.types import ExecutionStatus
 from core.types import JobID, TaskID
 from use_cases.job.run import FinalizeTask, MarkTaskBroken, PlannedJobs, RunJob, SetTaskToRunning
 import dishka

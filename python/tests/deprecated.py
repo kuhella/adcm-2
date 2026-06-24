@@ -47,9 +47,9 @@ from cm.models import (
     TaskLog,
 )
 from cm.transition.status import StatusScenarios
+from core.action import Task
 from core.legacy.cluster.types import HostComponentEntry
 from core.legacy.job.dto import TaskPayloadDTO
-from core.legacy.job.types import Task
 from core.legacy.rbac.dto import UserCreateDTO
 from core.types import ADCMCoreType, CoreObjectDescriptor
 from django.conf import settings

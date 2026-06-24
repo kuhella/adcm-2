@@ -10,8 +10,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from core.action.job import operations
+from core.action.job import errors, operations
+from core.action.job._repo import (
+    JobRepoI,
+    JobUpdateDTO,
+    LaunchOptions,
+    LogCreateDTO,
+    TaskCreateDTO,
+    TaskExtraInfo,
+    TaskMutableFieldsDTO,
+    TaskUpdateDTO,
+    TaskUpdateMainFieldsDTO,
+)
+from core.action.job._service import JobService
+from core.action.job._termination import (
+    DirectOSTerminationSignaller,
+    IndirectRepoTerminationSignaller,
+    TerminationSignaller,
+)
 
 __all__ = [
+    "DirectOSTerminationSignaller",
+    "IndirectRepoTerminationSignaller",
+    "JobRepoI",
+    "JobService",
+    "JobUpdateDTO",
+    "LaunchOptions",
+    "LogCreateDTO",
+    "TaskCreateDTO",
+    "TaskExtraInfo",
+    "TaskMutableFieldsDTO",
+    "TaskUpdateDTO",
+    "TaskUpdateMainFieldsDTO",
+    "TerminationSignaller",
+    "errors",
     "operations",
 ]

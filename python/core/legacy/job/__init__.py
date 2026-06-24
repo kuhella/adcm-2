@@ -10,9 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from core.action.job import JobRepoI, JobService
 from core.legacy.job import dto
-from core.legacy.job._repo import JobRepoI
-from core.legacy.job._service import JobService
 
 __all__ = [
     "JobRepoI",

@@ -19,12 +19,12 @@ from typing import Any, Generator, Iterable, Literal
 import json
 import traceback
 
+from core.action import AssociatedProcess, HcAclRule, Job, ScriptType, Task, TaskMappingDelta
+from core.action.job import TaskUpdateDTO
 from core.cluster import ClusterService
 from core.legacy.cluster.types import ClusterTopology
-from core.legacy.job.dto import TaskUpdateDTO
 from core.legacy.job.executors import BundleExecutorConfig, ExecutorConfig
 from core.legacy.job.runners import ExecutionTarget, ExecutionTargetFactoryI, ExternalSettings
-from core.legacy.job.types import AssociatedProcess, HcAclRule, Job, ScriptType, Task, TaskMappingDelta
 from core.logs import LogsService
 from core.scenarios.config import ConfigScenarios
 from core.types import ADCMCoreType, ClusterID, ComponentNameKey
@@ -42,6 +42,7 @@ import core
 
 from cm.converters import CoreObject, core_type_to_model, orm_object_to_core_descriptor
 from cm.errors import AdcmEx
+from cm.impl.job.repo import JobRepo
 from cm.legacy.services.action_process.types import ProcessStepState
 from cm.legacy.services.cluster import retrieve_cluster_topology
 from cm.legacy.services.config import ConfigAttrPair
@@ -52,7 +53,6 @@ from cm.legacy.services.job.run.executors import (
     InternalExecutor,
     PythonProcessExecutor,
 )
-from cm.legacy.services.job.run.repo import JobRepoImpl
 from cm.legacy.services.job.types import (
     ADCMJobConfig,
     ClusterActionType,
@@ -528,7 +528,7 @@ def _switch_hc_if_required(task: Task) -> None:
             else:
                 delta.add[component_id].add(new_entry["host_id"])
 
-    JobRepoImpl.update_task(id=task.id, data=TaskUpdateDTO(post_upgrade_hc_map=None, hostcomponentmap=delta))
+    JobRepo().update_task(id=task.id, data=TaskUpdateDTO(post_upgrade_hc_map=None, hostcomponentmap=delta))
 
 
 # ENVIRONMENT BUILDERS

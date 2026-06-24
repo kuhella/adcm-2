@@ -22,6 +22,7 @@ from use_cases.dto import RunActionDTO
 import core
 
 from cm.converters import model_name_to_core_type
+from cm.impl.job.repo import JobRepo
 from cm.legacy.api import add_service_to_cluster, update_obj_config
 from cm.legacy.services.cluster import retrieve_cluster_topology
 from cm.legacy.services.job.action import ObjectWithAction
@@ -295,7 +296,6 @@ class TestInventoryAndMaintenanceMode(WithDishkaContainer, BaseTestCase):
         self, action: Action, object_: ObjectWithAction, payload: RunActionDTO, cluster_id: int
     ) -> dict:
         from cm.legacy.services.job.run._target_factories import prepare_ansible_inventory
-        from cm.legacy.services.job.run.repo import JobRepoImpl
 
         self.assertEqual(TaskLog.objects.count(), 0)
         self.assertEqual(JobLog.objects.count(), 0)
@@ -310,7 +310,7 @@ class TestInventoryAndMaintenanceMode(WithDishkaContainer, BaseTestCase):
         task_id = self.task_runner.expect_task_launched().id
 
         inventory = prepare_ansible_inventory(
-            task=JobRepoImpl.get_task(task_id),
+            task=JobRepo().get_task(task_id),
             topology=retrieve_cluster_topology(cluster_id),
             cluster_service=self.uc.container.get(ClusterService),
         )

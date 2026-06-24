@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import NamedTuple, TypeAlias, TypedDict
 
-from core.legacy.job.types import ExecutionStatus
+from core.action import ExecutionStatus
 from core.types import ActionID, ConcernID, TaskID
 import zoneinfo
 

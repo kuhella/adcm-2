@@ -13,7 +13,9 @@
 from adcm.permissions import VIEW_TASKLOG_PERMISSION
 from adcm.serializers import EmptySerializer
 from audit.alt.api import audit_update
+from cm.errors import AdcmEx
 from cm.models import ProcessStepInput, TaskLog
+from dishka import FromDishka
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import OuterRef, QuerySet, Subquery
 from django.http import HttpResponse
@@ -30,6 +32,7 @@ from rest_framework.status import (
     HTTP_404_NOT_FOUND,
     HTTP_409_CONFLICT,
 )
+import core
 
 from api_v2.api_schema import DefaultParams, ErrorSerializer, responses
 from api_v2.log_storage.utils import (
@@ -140,11 +143,14 @@ class TaskViewSet(PermissionListMixin, ListModelMixin, RetrieveModelMixin, ADCMG
 
     @audit_update(name="{task_name} cancelled", object_=detect_object_for_task).attach_hooks(on_collect=set_task_name)
     @action(methods=["post"], detail=True, serializer_class=EmptySerializer)
-    def terminate(self, request: Request, *args, **kwargs) -> Response:  # noqa: ARG001, ARG002
-        task = self.get_object()
-        task.cancel()
+    def terminate(self, *_, job_service: FromDishka[core.action.job.JobService], id: str, **__) -> Response:  # noqa: A002
+        try:
+            job_service.terminate_task(task_id=int(id))
+        except (core.action.job.errors.JobValidationError, core.action.job.errors.JobTerminationError) as e:
+            raise AdcmEx("NOT_ALLOWED_TERMINATION", e.message) from None
+        # todo cover not existing case
 
-        return Response(status=HTTP_200_OK, data=TaskListSerializer(instance=task).data)
+        return Response(status=HTTP_200_OK)
 
     @action(methods=["get"], detail=True, url_path="logs/download")
     def download(self, request: Request, *args, **kwargs):  # noqa: ARG001, ARG002

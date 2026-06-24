@@ -11,16 +11,52 @@
 # limitations under the License.
 
 # order is important
-from core.action._types import JobSpec, ScriptType, ExecutionStatus  # noqa
-from core.action import _wizard as wizard  # noqa
-from core.action import job  # noqa
 from core.action import _context as context
-from core.action import operations
+
+# noqa
+from core.action import _wizard as wizard  # noqa
+from core.action import (
+    job,  # noqa
+    operations,
+)
+from core.action._types import (
+    ActionInfo,
+    AssociatedProcess,
+    BundleInfo,
+    CallingProcess,
+    ExecutionStatus,
+    HcAclRule,
+    HostComponentChanges,
+    Job,
+    JobParams,
+    JobSpec,
+    RelatedObjects,
+    ScriptType,
+    StateChanges,
+    Task,
+    TaskActionInfo,
+    TaskMappingDelta,
+    TaskOwner,
+)
 
 __all__ = [
+    "ActionInfo",
+    "AssociatedProcess",
+    "BundleInfo",
+    "CallingProcess",
     "ExecutionStatus",
+    "HcAclRule",
+    "HostComponentChanges",
+    "Job",
+    "JobParams",
     "JobSpec",
+    "RelatedObjects",
     "ScriptType",
+    "StateChanges",
+    "Task",
+    "TaskActionInfo",
+    "TaskMappingDelta",
+    "TaskOwner",
     "context",
     "job",
     "operations",

@@ -12,7 +12,6 @@
 
 from typing import TypeAlias
 
-from cm.legacy.services.job.run.repo import JobRepoImpl
 from cm.models import Cluster, Component, Host, Provider, Service
 from tests.suites import ADCMPluginExecutorSuite
 
@@ -156,7 +155,7 @@ class TestADCMStatePluginExecutors(ADCMPluginExecutorSuite):
                 raise NotImplementedError(str(executor_class))
 
         task = self.prepare_task(owner=owner, name="dummy")
-        job, *_ = JobRepoImpl.get_task_jobs(task.id)
+        job, *_ = self.get_task_jobs(task.id)
 
         executor = self.prepare_executor(
             executor_type=executor_class,

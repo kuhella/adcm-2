@@ -10,8 +10,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from core.types import ADCMMessageError
+from dataclasses import dataclass
+from typing import Protocol
+
+from core.result import Fail, Success
+from core.types import JobID, TaskID
 
 
-class TaskCreateError(ADCMMessageError):
+class TerminationSignaller(Protocol):
+    def signal_termination_for_task(self, task_id: TaskID) -> Success[None] | Fail[str]:
+        ...
+
+    def signal_termination_for_job(self, job_id: JobID) -> Success[None] | Fail[str]:
+        ...
+
+
+class DirectOSTerminationSignaller(TerminationSignaller):
+    ...
+
+
+@dataclass(slots=True)
+class IndirectRepoTerminationSignaller(TerminationSignaller):
     ...

@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Any, Iterable, Literal, Mapping, TypeAlias
 import json
 
+from core.action import TaskMappingDelta
 from core.cluster import ClusterService
 from core.legacy.cluster.operations import create_topology_with_new_mapping, find_hosts_difference
 from core.legacy.cluster.types import HostComponentEntry
-from core.legacy.job.types import TaskMappingDelta
 from core.types import CoreObjectDescriptor
 from django.contrib.contenttypes.models import ContentType
 from jinja2 import Template
