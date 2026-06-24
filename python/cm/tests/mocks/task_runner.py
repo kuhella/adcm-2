@@ -10,9 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Callable, Generator, Iterable
 from datetime import datetime
 from functools import partial
-from typing import Any, Callable, Generator, Iterable, NamedTuple
+from typing import Any, NamedTuple
 
 from core.cluster import ClusterService
 from core.legacy.job.executors import ExecutionResult, Executor, ExecutorConfig
@@ -28,6 +29,7 @@ from use_cases.provider.update import ResetBeforeUpgradeProvider
 from use_cases.transition.config import UpdateConfigurationFromJob
 
 from cm.legacy.services.job.run import ExecutionTargetFactory
+from cm.legacy.services.job.run.executors import InternalScriptResult
 from cm.legacy.services.job.run.repo import JobRepoImpl
 
 
@@ -190,12 +192,13 @@ class MockExecutor(Executor):
 class InternalExecutorMock(MockExecutor):
     script_type = "internal"
 
-    def __init__(self, config: ExecutorConfig, script: Callable[[], int]):
+    def __init__(self, config: ExecutorConfig, script: Callable[[], InternalScriptResult]):
         super().__init__(config=config)
         self._script = script
 
     def execute(self) -> Self:
-        self._result = ExecutionResult(code=self._script())
+        script_result = self._script()
+        self._result = ExecutionResult(code=script_result.code)
         return self
 
 

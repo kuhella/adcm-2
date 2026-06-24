@@ -11,12 +11,13 @@
 # limitations under the License.
 
 from collections import defaultdict
+from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
 from functools import partial
-from pathlib import Path
-from typing import Callable, Collection, Final, Iterable, TypeAlias, cast
-
 from graphlib import CycleError, TopologicalSorter
+from pathlib import Path
+from typing import Final, TypeAlias, cast
+
 import jinja2
 
 from core import action, config
@@ -237,7 +238,9 @@ def check_config_defaults(
 ):
     violations = config_service.validate_configuration_definition(specification=specification, defaults=defaults)
     if violations:
-        violations_list_repr = "; ".join(f"- {v.parameter} [{v.check}]: {v.reason}" for v in violations)
+        violations_list_repr = "; ".join(
+            f"- {specification.get_full_display_name(v.parameter)} [{v.check}]: {v.reason}" for v in violations
+        )
         raise BundleValidationError(message=f"object's defaults are invalid: {violations_list_repr}")
 
 
