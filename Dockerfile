@@ -38,6 +38,7 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
 # 2. Install additional packages from requirements into the venv
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /venv/2.16 /venv/2.16
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/lib/python3.10 /usr/local/lib/python3.10
+COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/lib/libpython3.10.so.1.0 /usr/local/lib/libpython3.10.so.1.0
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/bin/python3.10 /usr/local/bin/python3.10
 RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
     --mount=type=bind,source=ansible-2.16-python3.10-dependencies.txt,target=ansible-2.16-python3.10-dependencies.txt \
@@ -68,6 +69,7 @@ COPY --from=ui_builder /wwwroot /adcm/wwwroot
 COPY --from=python_builder /usr/local/bin /usr/local/bin
 COPY --from=python_builder /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=python_builder /usr/local/lib/python3.10 /usr/local/lib/python3.10
+COPY --from=python_builder /usr/local/lib/libpython3.10.so.1.0 /usr/local/lib/libpython3.10.so.1.0
 COPY --from=python_builder /python /python
 COPY --from=python_builder /adcm/.venv /adcm/.venv
 COPY --from=python_builder /venv/2.16 /venv/2.16
