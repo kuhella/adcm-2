@@ -24,6 +24,7 @@ from core.action import (
     AssociatedProcess,
     BundleInfo,
     CallingProcess,
+    ExecutionEnvironment,
     ExecutionStatus,
     HcAclRule,
     HostComponentChanges,
@@ -168,6 +169,7 @@ class JobRepo(JobRepoI):
                 post_upgrade=task_record.post_upgrade_hc_map,
                 mapping_delta=_restore_delta_from_db_format(task_delta=task_record.hostcomponentmap),
             ),
+            execution_env=ExecutionEnvironment(pid=task_record.pid),
             on_success=StateChanges(
                 state=task_record.action.state_on_success,
                 multi_state_set=tuple(task_record.action.multi_state_on_success_set or ()),
@@ -480,6 +482,7 @@ def _job_log_to_job(job: JobLog) -> Job:
             multi_state_set=tuple(job.multi_state_on_fail_set or ()),
             multi_state_unset=tuple(job.multi_state_on_fail_unset or ()),
         ),
+        execution_env=ExecutionEnvironment(pid=job.pid),
     )
 
 
@@ -699,6 +702,7 @@ def _job_from_job_log(job: JobLog) -> Job:
             multi_state_set=tuple(job.multi_state_on_fail_set or ()),
             multi_state_unset=tuple(job.multi_state_on_fail_unset or ()),
         ),
+        execution_env=ExecutionEnvironment(pid=job.pid),
     )
 
 

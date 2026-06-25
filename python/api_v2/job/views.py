@@ -16,11 +16,13 @@ from adcm.serializers import EmptySerializer
 from audit.alt.api import audit_update
 from cm.errors import AdcmEx
 from cm.models import JobLog
+from core.errors import NotFoundError
 from dishka import FromDishka
 from django.contrib.contenttypes.models import ContentType
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from guardian.mixins import PermissionListMixin
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -38,7 +40,7 @@ from api_v2.job.permissions import JobPermissions
 from api_v2.job.serializers import JobRetrieveSerializer
 from api_v2.task.serializers import JobListSerializer
 from api_v2.utils.audit import detect_object_for_job, set_job_name
-from api_v2.views import ADCMGenericViewSet
+from api_v2.views import ADCMGenericViewSet, inject
 
 
 @extend_schema_view(
@@ -91,13 +93,15 @@ class JobViewSet(PermissionListMixin, ListModelMixin, RetrieveModelMixin, ADCMGe
 
     @audit_update(name="{job_name} terminated", object_=detect_object_for_job).attach_hooks(on_collect=set_job_name)
     @action(methods=["post"], detail=True)
-    def terminate(self, *_, job_service: FromDishka[core.action.job.JobService], id: str, **__) -> Response:  # noqa: A002
+    @inject
+    def terminate(self, *_, job_service: FromDishka[core.action.job.JobService], pk: str, **__) -> Response:
         try:
-            job_service.terminate_job(job_id=int(id))
+            job_service.terminate_job(job_id=int(pk))
         except core.action.job.errors.JobValidationError as e:
             raise AdcmEx("JOB_TERMINATION_ERROR", e.message) from None
         except core.action.job.errors.JobTerminationError as e:
             raise AdcmEx("NOT_ALLOWED_TERMINATION", e.message) from None
-        # todo cover not existing case
+        except NotFoundError:
+            raise NotFound() from None
 
         return Response(status=HTTP_200_OK)

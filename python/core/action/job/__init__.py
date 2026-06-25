@@ -19,6 +19,7 @@ from core.action.job._repo import (
     TaskCreateDTO,
     TaskExtraInfo,
     TaskMutableFieldsDTO,
+    TaskPayloadDTO,
     TaskUpdateDTO,
     TaskUpdateMainFieldsDTO,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "TaskCreateDTO",
     "TaskExtraInfo",
     "TaskMutableFieldsDTO",
+    "TaskPayloadDTO",
     "TaskUpdateDTO",
     "TaskUpdateMainFieldsDTO",
     "TerminationSignaller",

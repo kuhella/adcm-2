@@ -61,7 +61,7 @@ class JobService:
             message = f"Task #{task_id} termination is not allowed due to status: {task.status}"
             raise JobValidationError(message)
 
-        result = self.signaller.signal_termination_for_task(task_id)
+        result = self.signaller.signal_termination_for_task(task)
         if isinstance(result, Fail):
             message = f"Task #{task_id} termination failed: {result.value}"
             raise JobTerminationError(message)
@@ -77,7 +77,7 @@ class JobService:
             message = f"Job #{job_id} termination is not allowed due to status: {job.status}"
             raise JobValidationError(message)
 
-        result = self.signaller.signal_termination_for_job(job_id)
+        result = self.signaller.signal_termination_for_job(job)
         if isinstance(result, Fail):
             message = f"Job #{job_id} termination failed: {result.value}"
             raise JobTerminationError(message)

@@ -13,7 +13,7 @@
 from copy import deepcopy
 from uuid import UUID
 
-from core.legacy.job.dto import LaunchOptions, TaskPayloadDTO
+from core.action.job import LaunchOptions, TaskPayloadDTO
 from core.legacy.job.runners import (
     ADCMSettings,
     AnsibleSettings,
@@ -21,7 +21,7 @@ from core.legacy.job.runners import (
     ExternalSettings,
     IntegrationsSettings,
 )
-from core.types import CoreObjectDescriptor
+from core.types import ActionTargetDescriptor
 from django.conf import settings
 from use_cases.dto import ConfigurationDTO, RunActionDTO
 import core
@@ -384,7 +384,7 @@ class TestScriptPathsInActionConfig(BaseInventoryTestCase):
         for action_name in ("job_proto_relative", "job_bundle_relative", "task_mixed"):
             for object_, type_name in ((self.cluster, "cluster"), (self.service_1, "service")):
                 action = Action.objects.filter(prototype=object_.prototype, name=action_name).first()
-                target = CoreObjectDescriptor(
+                target = ActionTargetDescriptor(
                     id=object_.pk, type=model_name_to_core_type(object_.__class__.__name__.lower())
                 )
                 task = prepare_task_for_action(

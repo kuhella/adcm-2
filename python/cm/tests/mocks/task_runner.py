@@ -15,7 +15,6 @@ from functools import partial
 from typing import Any, Callable, Generator, Iterable, NamedTuple
 
 from core.action import Job, ScriptType, Task
-from core.action.job import JobRepoI
 from core.cluster import ClusterService
 from core.legacy.job.executors import ExecutionResult, Executor, ExecutorConfig
 from core.legacy.job.runners import ExecutionTarget, ExternalSettings
@@ -28,6 +27,7 @@ from use_cases.cluster.update import ResetBeforeUpgradeCluster
 from use_cases.provider.update import ResetBeforeUpgradeProvider
 from use_cases.transition.config import UpdateConfigurationFromJob
 
+from cm.impl.job.repo import JobRepo
 from cm.legacy.services.job.run import ExecutionTargetFactory
 
 
@@ -211,6 +211,6 @@ class SubprocessRunnerMockEnvironment:
         return timezone.now()
 
 
-class JobImplRunnerMock(JobRepoI):
+class JobImplRunnerMock(JobRepo):
     def close_old_connections(self) -> None:
         return

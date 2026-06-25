@@ -15,6 +15,7 @@ from adcm.serializers import EmptySerializer
 from audit.alt.api import audit_update
 from cm.errors import AdcmEx
 from cm.models import ProcessStepInput, TaskLog
+from core.errors import NotFoundError
 from dishka import FromDishka
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import OuterRef, QuerySet, Subquery
@@ -22,6 +23,7 @@ from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from guardian.mixins import PermissionListMixin
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -43,7 +45,7 @@ from api_v2.task.filters import TaskFilter
 from api_v2.task.permissions import TaskPermissions
 from api_v2.task.serializers import TaskListSerializer
 from api_v2.utils.audit import detect_object_for_task, set_task_name
-from api_v2.views import ADCMGenericViewSet
+from api_v2.views import ADCMGenericViewSet, inject
 
 
 @extend_schema_view(
@@ -143,12 +145,14 @@ class TaskViewSet(PermissionListMixin, ListModelMixin, RetrieveModelMixin, ADCMG
 
     @audit_update(name="{task_name} cancelled", object_=detect_object_for_task).attach_hooks(on_collect=set_task_name)
     @action(methods=["post"], detail=True, serializer_class=EmptySerializer)
-    def terminate(self, *_, job_service: FromDishka[core.action.job.JobService], id: str, **__) -> Response:  # noqa: A002
+    @inject
+    def terminate(self, *_, job_service: FromDishka[core.action.job.JobService], pk: str, **__) -> Response:
         try:
-            job_service.terminate_task(task_id=int(id))
+            job_service.terminate_task(task_id=int(pk))
         except (core.action.job.errors.JobValidationError, core.action.job.errors.JobTerminationError) as e:
             raise AdcmEx("NOT_ALLOWED_TERMINATION", e.message) from None
-        # todo cover not existing case
+        except NotFoundError:
+            raise NotFound() from None
 
         return Response(status=HTTP_200_OK)
 

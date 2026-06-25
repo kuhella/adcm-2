@@ -12,6 +12,7 @@
 
 # order is important
 from core.action._types import (  # noqa
+    ExecutionEnvironment,
     ActionInfo,
     AssociatedProcess,
     BundleInfo,
@@ -41,6 +42,7 @@ __all__ = [
     "AssociatedProcess",
     "BundleInfo",
     "CallingProcess",
+    "ExecutionEnvironment",
     "ExecutionStatus",
     "HcAclRule",
     "HostComponentChanges",

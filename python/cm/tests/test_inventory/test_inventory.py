@@ -331,7 +331,7 @@ class TestInventoryAndMaintenanceMode(WithDishkaContainer, BaseTestCase):
                     HostComponentEntry(host_id=entry["host_id"], component_id=entry["component_id"])
                     for entry in hc_request_data
                 },
-                launch=core.legacy.job.dto.LaunchOptions(
+                launch=core.action.job.LaunchOptions(
                     is_verbose=False,
                 ),
             ),
@@ -382,7 +382,7 @@ class TestInventoryAndMaintenanceMode(WithDishkaContainer, BaseTestCase):
                     HostComponentEntry(host_id=entry["host_id"], component_id=entry["component_id"])
                     for entry in hc_request_data
                 },
-                launch=core.legacy.job.dto.LaunchOptions(is_verbose=False),
+                launch=core.action.job.LaunchOptions(is_verbose=False),
             ),
             cluster_id=self.cluster_hc_acl.pk,
         )["children"]
@@ -427,7 +427,7 @@ class TestInventoryAndMaintenanceMode(WithDishkaContainer, BaseTestCase):
         inventory_data = self.get_all_from_inventory(
             action=Action.objects.get(name="not_host_action"),
             object_=self.cluster_target_group,
-            payload=RunActionDTO(launch=core.legacy.job.dto.LaunchOptions(is_verbose=False)),
+            payload=RunActionDTO(launch=core.action.job.LaunchOptions(is_verbose=False)),
             cluster_id=self.cluster_target_group.pk,
         )["children"]
 
@@ -455,7 +455,7 @@ class TestInventoryAndMaintenanceMode(WithDishkaContainer, BaseTestCase):
         target_hosts_data = self.get_all_from_inventory(
             action=self.action_target_group,
             object_=self.host_target_group_1,
-            payload=RunActionDTO(launch=core.legacy.job.dto.LaunchOptions(is_verbose=False)),
+            payload=RunActionDTO(launch=core.action.job.LaunchOptions(is_verbose=False)),
             cluster_id=self.cluster_target_group.pk,
         )["children"]["target"]["hosts"]
 
@@ -468,7 +468,7 @@ class TestInventoryAndMaintenanceMode(WithDishkaContainer, BaseTestCase):
         target_hosts_data = self.get_all_from_inventory(
             action=self.action_target_group,
             object_=self.host_target_group_2,
-            payload=RunActionDTO(launch=core.legacy.job.dto.LaunchOptions(is_verbose=False)),
+            payload=RunActionDTO(launch=core.action.job.LaunchOptions(is_verbose=False)),
             cluster_id=self.cluster_target_group.pk,
         )["children"]["target"]["hosts"]
 

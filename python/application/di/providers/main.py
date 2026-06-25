@@ -34,6 +34,7 @@ from cm.legacy.services.job.run import start_task
 from cm.transition.action import RetrieveStartImpossibleReason
 from cm.transition.status import StatusScenarios
 from core import secrets
+from core.action.job._termination import DirectOSTerminationSignaller, TerminationSignaller
 from core.bundle import VersionSupportStatus
 from core.dynamic_bundle.render import BundleRenderer
 from core.dynamic_bundle.types import ContextGathererI
@@ -99,6 +100,10 @@ class ConfigProvider(Provider):
 
 class JobProvider(Provider):
     scope = Scope.APP
+
+    @provide
+    def termination_signaller(self) -> TerminationSignaller:
+        return DirectOSTerminationSignaller()
 
     repo = provide(JobRepo, provides=core.action.job.JobRepoI)
     service = provide(core.action.job.JobService)

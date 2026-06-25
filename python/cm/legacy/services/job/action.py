@@ -13,8 +13,7 @@
 from typing import Iterable, Sequence, TypeAlias
 
 from core.action import JobSpec, ScriptType, Task, TaskMappingDelta
-from core.action.job import LogCreateDTO, TaskCreateDTO, TaskExtraInfo
-from core.action.job._repo import LaunchOptions, TaskPayloadDTO
+from core.action.job import LaunchOptions, LogCreateDTO, TaskCreateDTO, TaskExtraInfo, TaskPayloadDTO
 from core.action.job.errors import TaskCreateError
 from core.legacy.cluster.operations import create_topology_with_new_mapping, find_hosts_difference
 from core.legacy.cluster.types import ClusterTopology, HostComponentEntry
@@ -53,7 +52,7 @@ ActionTarget: TypeAlias = ObjectWithAction | ActionHostGroup
 
 
 def prepare_task_for_action(
-    target: ActionTargetDescriptor,
+    target: ActionTargetDescriptor | CoreObjectDescriptor,
     orm_owner: ObjectWithAction,
     orm_target: ActionTarget,
     action: ActionID,
@@ -82,7 +81,7 @@ def prepare_task_for_action(
 
     create_dto = TaskCreateDTO(
         owner=owner,
-        target=target.as_core_or_group_descriptor,
+        target=target.as_core_or_group_descriptor if not isinstance(target, CoreObjectDescriptor) else target,
         action_id=action,
         launch=LaunchOptions(is_verbose=payload.verbose, is_blocking=payload.is_blocking),
         extra=TaskExtraInfo(
@@ -90,7 +89,8 @@ def prepare_task_for_action(
         ),
     )
 
-    task = job_repo.create_task(payload=create_dto)
+    task_id = job_repo.create_task(payload=create_dto)
+    task = job_repo.get_task(task_id)
 
     if payload.conf:
         raise NotImplementedError("Running an action with a configuration is no longer supported by this function.")
@@ -127,7 +127,7 @@ def prepare_task_for_action(
         message = f"Can't compose task for action #{action}, because no associated jobs found"
         raise TaskCreateError(message)
 
-    job_repo.create_jobs(task_id=task.id, jobs=job_specifications)
+    job_repo.create_jobs(task_id=task.id, scripts=job_specifications)
 
     logs = []
     for job in job_repo.get_task_jobs(task_id=task.id):

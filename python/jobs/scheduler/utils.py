@@ -20,7 +20,7 @@ from cm.impl.job.repo import JobRepo
 from cm.legacy.services.concern.locks import delete_task_flag_concern, delete_task_lock_concern
 from cm.legacy.status_api import send_task_status_update_event
 from core.action import ExecutionStatus
-from core.legacy.job.dto import JobUpdateDTO, TaskUpdateDTO
+from core.action.job import JobUpdateDTO, TaskUpdateDTO
 from core.types import (
     PID,
 )

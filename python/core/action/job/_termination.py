@@ -12,21 +12,39 @@
 
 from dataclasses import dataclass
 from typing import Protocol
+import os
+import signal
 
+from core.action._types import Job, Task
 from core.result import Fail, Success
-from core.types import JobID, TaskID
 
 
 class TerminationSignaller(Protocol):
-    def signal_termination_for_task(self, task_id: TaskID) -> Success[None] | Fail[str]:
+    def signal_termination_for_task(self, task: Task) -> Success[None] | Fail[str]:
         ...
 
-    def signal_termination_for_job(self, job_id: JobID) -> Success[None] | Fail[str]:
+    def signal_termination_for_job(self, job: Job) -> Success[None] | Fail[str]:
         ...
 
 
+@dataclass(slots=True)
 class DirectOSTerminationSignaller(TerminationSignaller):
-    ...
+    def signal_termination_for_task(self, task: Task) -> Success[None] | Fail[str]:
+        return self.terminate_local_process(task.execution_env.pid)
+
+    def signal_termination_for_job(self, job: Job) -> Success[None] | Fail[str]:
+        return self.terminate_local_process(job.execution_env.pid)
+
+    def terminate_local_process(self, pid: int) -> Success[None] | Fail[str]:
+        if pid == 0:
+            return Fail("termination is too early, try to execute later")
+
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError as e:
+            return Fail(f"failed to terminate process: {e}")
+
+        return Success(None)
 
 
 @dataclass(slots=True)

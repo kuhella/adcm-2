@@ -29,7 +29,7 @@ from cm.models import (
     Service,
     TaskLog,
 )
-from core.legacy.job.dto import TaskPayloadDTO
+from core.action.job import TaskPayloadDTO
 from core.types import ADCMCoreType, CoreObjectDescriptor
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone

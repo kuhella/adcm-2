@@ -48,10 +48,10 @@ from cm.models import (
 )
 from cm.transition.status import StatusScenarios
 from core.action import Task
+from core.action.job import TaskPayloadDTO
 from core.legacy.cluster.types import HostComponentEntry
-from core.legacy.job.dto import TaskPayloadDTO
 from core.legacy.rbac.dto import UserCreateDTO
-from core.types import ADCMCoreType, CoreObjectDescriptor
+from core.types import ActionTargetDescriptor, ADCMCoreType, CoreObjectDescriptor
 from django.conf import settings
 from django.db.models import QuerySet
 from django.db.transaction import atomic
@@ -267,7 +267,7 @@ class TaskTestMixin:
         action = Action.objects.get(prototype_id=owner.prototype_id, **action_search_kwargs)
         target = owner_descriptor if not host else CoreObjectDescriptor(id=host.id, type=ADCMCoreType.HOST)
         return prepare_task_for_action(
-            target=target,
+            target=ActionTargetDescriptor(id=target.id, type=target.type),
             orm_owner=owner,
             orm_target=host or owner,
             action=action.id,

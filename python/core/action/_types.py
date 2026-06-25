@@ -38,6 +38,11 @@ V = TypeVar("V")
 CT = TypeVar("CT", bound=ADCMCoreType)
 
 
+@dataclass(slots=True)
+class ExecutionEnvironment:
+    pid: int
+
+
 class ScriptType(str, Enum):
     ANSIBLE = "ansible"
     PYTHON = "python"
@@ -131,6 +136,8 @@ class Job(BaseModel):
 
     is_termination_allowed: bool
 
+    execution_env: ExecutionEnvironment
+
 
 class BundleInfo(NamedTuple):
     # root is directory of bundle like /adcm/data/bundle/somehash
@@ -206,6 +213,8 @@ class Task(BaseModel):
     is_termination_allowed: bool
 
     description: str
+
+    execution_env: ExecutionEnvironment
 
 
 class ActionInfo(BaseModel):
