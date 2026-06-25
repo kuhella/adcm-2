@@ -37,6 +37,7 @@ directories = container.get(Directories)
 
 # Directories re-wiring (most of them aren't required anymore)
 BASE_DIR = directories.base
+ANSIBLE_VENV = directories.ansible_venv
 BUNDLE_DIR = directories.bundles
 CODE_DIR = directories.code
 DOWNLOAD_DIR = directories.downloads

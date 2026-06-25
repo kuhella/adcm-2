@@ -12,18 +12,12 @@ WORKDIR /code
 RUN . build.sh
 
 
-FROM python:3.10-alpine3.23 AS python_builder
+FROM python:3.12-alpine3.23 AS python_builder
 
 RUN apk add --no-cache --virtual .build-deps \
     build-base \
     linux-headers \
     openldap-dev
-
-ENV UV_PYTHON_INSTALL_DIR=/python
-
-# Install Python 3.12
-RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
-    uv python install 3.12
 
 WORKDIR /adcm
 
@@ -33,15 +27,25 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --python 3.12 --group run --locked
 
-# Prepare venv Python 3.10 for Ansible 2.16
+# Take the base venv from the ansible image
+COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /venv/2.16 /venv/2.16
+COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/lib/python3.10 /usr/local/lib/python3.10
+COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/bin/python3.10 /usr/local/bin/python3.10
+COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/lib/libpython3.10.so* /usr/local/lib/
+COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/include/python3.10 /usr/local/include/python3.10
+# Symlinks in the Ansible venv to point to Python 3.10
+RUN rm -f /venv/2.16/bin/python /venv/2.16/bin/python3 /venv/2.16/bin/python3.10 && \
+    ln -s /usr/local/bin/python3.10 /venv/2.16/bin/python3.10 && \
+    ln -s /venv/2.16/bin/python3.10 /venv/2.16/bin/python3 && \
+    ln -s /venv/2.16/bin/python3 /venv/2.16/bin/python
+
+# Install ADCM's Python modules to venv 2.16
 RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
     --mount=type=bind,source=ansible-2.16-python3.10-dependencies.txt,target=ansible-2.16-python3.10-dependencies.txt \
-    uv venv -p 3.10 /venv/2.16 && \
-    source /venv/2.16/bin/activate && \
-    uv pip install -p 3.10 -r ansible-2.16-python3.10-dependencies.txt
+    uv pip install --python /venv/2.16/bin/python --no-cache -r ansible-2.16-python3.10-dependencies.txt
 
 
-FROM python:3.10-alpine3.23
+FROM python:3.12-alpine3.23
 
 RUN apk update && \
     apk upgrade && \
@@ -64,10 +68,10 @@ COPY --from=go_builder /code/bin/runstatus /adcm/go/bin/runstatus
 COPY --from=ui_builder /wwwroot /adcm/wwwroot
 COPY --from=python_builder /usr/local/bin /usr/local/bin
 COPY --from=python_builder /usr/local/lib/python3.10 /usr/local/lib/python3.10
-COPY --from=python_builder /python /python
+COPY --from=python_builder /usr/local/lib/libpython3.10.so* /usr/local/lib/
+COPY --from=python_builder /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=python_builder /adcm/.venv /adcm/.venv
 COPY --from=python_builder /venv/2.16 /venv/2.16
-COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /venv/2.16 /venv/2.16
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /root/.ansible/collections /root/.ansible/collections
 COPY conf /adcm/conf
 COPY python/ansible_collections/arenadata/adcm/plugins /usr/share/ansible/plugins
@@ -75,12 +79,11 @@ COPY python/ansible_collections/arenadata/adcm /root/.ansible/collections/ansibl
 COPY python /adcm/python
 
 RUN ln -s -f /usr/local/bin/python3 /usr/bin/python3 && \
-    ln -s -f /usr/bin/python3 /usr/bin/python
+    ln -s -f /usr/bin/python3 /usr/bin/python && \
+    ln -s /adcm/python/application/scripts/manage_secrets.py /adcm/python/manage_secrets.py
 
-RUN python3.10 -m pip uninstall -y pip && \
+RUN python3.12 -m pip uninstall -y pip && \
     rm -rf /root/.cache/pip
-
-RUN ln -s /adcm/python/application/scripts/manage_secrets.py /adcm/python/manage_secrets.py
 
 RUN mkdir -p /adcm/data/log
 

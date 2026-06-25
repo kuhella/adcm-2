@@ -71,6 +71,7 @@ class EnvironmentProvider(Provider):
         return Directories(
             base=base_dir,
             stack=stack_dir,
+            ansible_venv=Path("/venv/2.16"),  # Temporary solution, in future only "venv" prefix, without "2,16"
             files=stack_data_dir / "file",
             bundles=stack_data_dir / "bundle",
             downloads=stack_data_dir / "download",
