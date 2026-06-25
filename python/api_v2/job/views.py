@@ -95,12 +95,15 @@ class JobViewSet(PermissionListMixin, ListModelMixin, RetrieveModelMixin, ADCMGe
     @action(methods=["post"], detail=True)
     @inject
     def terminate(self, *_, job_service: FromDishka[core.action.job.JobService], pk: str, **__) -> Response:
+        # for pemission checks
+        self.get_object()
+
         try:
             job_service.terminate_job(job_id=int(pk))
         except core.action.job.errors.JobValidationError as e:
-            raise AdcmEx("JOB_TERMINATION_ERROR", e.message) from None
-        except core.action.job.errors.JobTerminationError as e:
             raise AdcmEx("NOT_ALLOWED_TERMINATION", e.message) from None
+        except core.action.job.errors.JobTerminationError as e:
+            raise AdcmEx("JOB_TERMINATION_ERROR", e.message) from None
         except NotFoundError:
             raise NotFound() from None
 

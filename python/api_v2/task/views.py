@@ -147,6 +147,9 @@ class TaskViewSet(PermissionListMixin, ListModelMixin, RetrieveModelMixin, ADCMG
     @action(methods=["post"], detail=True, serializer_class=EmptySerializer)
     @inject
     def terminate(self, *_, job_service: FromDishka[core.action.job.JobService], pk: str, **__) -> Response:
+        # for pemission checks
+        self.get_object()
+
         try:
             job_service.terminate_task(task_id=int(pk))
         except (core.action.job.errors.JobValidationError, core.action.job.errors.JobTerminationError) as e:

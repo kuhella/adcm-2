@@ -388,7 +388,7 @@ class TestActionsFiltering(ADCMDjangoAPISuite):
             response.json(),
             {
                 "code": "JOB_TERMINATION_ERROR",
-                "desc": f"Can't terminate job #{job.id}, pid: 0 with status created",
+                "desc": f"Job #{job.id} termination failed: termination is too early, try to execute later",
                 "level": "error",
             },
         )
