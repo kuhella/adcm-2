@@ -152,7 +152,7 @@ class JobRepo(JobRepoI):
             is_termination_allowed=task_record.action.allow_to_terminate,
             selector=task_record.selector,
             action=TaskActionInfo(
-                id=int(task_record.action_id),
+                id=int(task_record.action_id),  # pyright: ignore[reportAttributeAccessIssue]
                 name=task_record.action.name,
                 display_name=task_record.action.display_name,
                 venv=task_record.action.venv,
@@ -275,9 +275,9 @@ class JobRepo(JobRepoI):
         target = TaskLog.objects.get(id=task_id).task_object
 
         if isinstance(target, ActionHostGroup):
-            return ActionHostGroup.objects.get(id=target.id).object
+            return cast(TaskTargetCoreObject, ActionHostGroup.objects.get(id=target.pk).object)
 
-        return target
+        return cast(TaskTargetCoreObject, target)
 
     # create
 
