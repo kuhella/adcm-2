@@ -11,15 +11,7 @@
 # limitations under the License.
 
 # order is important
-from core.action import _context as context
-
-# noqa
-from core.action import _wizard as wizard  # noqa
-from core.action import (
-    job,  # noqa
-    operations,
-)
-from core.action._types import (
+from core.action._types import (  # noqa
     ActionInfo,
     AssociatedProcess,
     BundleInfo,
@@ -38,6 +30,11 @@ from core.action._types import (
     TaskMappingDelta,
     TaskOwner,
 )
+
+from core.action import _wizard as wizard  # noqa
+
+from core.action import _context as context
+from core.action import job, operations
 
 __all__ = [
     "ActionInfo",
