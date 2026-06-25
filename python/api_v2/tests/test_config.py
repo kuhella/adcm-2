@@ -301,6 +301,48 @@ class TestClusterConfig(ADCMDjangoAPISuite):
                 response = self.client.v2[self.cluster_1, CONFIG_SCHEMA].get()
                 self.assertEqual(response.status_code, HTTP_403_FORBIDDEN)
 
+    def test_adcm_8014_8016_oneof_for_option_and_variant_no_required_configs(self):
+        """
+        Check the "oneOf" section for no-required option/variant fields. Additionally checks:
+        - variant configs have the "string" type;
+        - no changes for structure configs.
+        """
+
+        self.service, *_ = self.uc.add_services_to_cluster(names=["adcm_8014_8016"], cluster=self.cluster_1)
+
+        response = self.client.v2[self.service, CONFIG_SCHEMA].get()
+        self.assertEqual(response.status_code, HTTP_200_OK)
+
+        properties = response.json()["properties"]
+        no_required_cases = (
+            "option_no_req_def",
+            "variant_no_req_def",
+            "structure_no_req_def",
+            "structure_list_no_req_def",
+            "structure_dict_no_req_def",
+        )
+        required_cases = (
+            "variant_req_def",
+            "structure_req_def",
+        )
+
+        for field_name in no_required_cases:
+            with self.subTest(field_name=field_name):
+                schema = properties[field_name]
+                self.assertIn("oneOf", schema)
+                self.assertEqual(schema["oneOf"][1], {"type": "null"})
+                self.assertEqual(schema["oneOf"][0]["title"], field_name)
+
+        for field_name in required_cases:
+            with self.subTest(field_name=field_name):
+                schema = properties[field_name]
+                self.assertNotIn("oneOf", schema)
+                self.assertEqual(schema["title"], field_name)
+
+        # check a type of variant configs
+        self.assertEqual(properties["variant_no_req_def"]["oneOf"][0]["type"], "string")
+        self.assertEqual(properties["variant_req_def"]["type"], "string")
+
 
 class TestSaveConfigWithoutRequiredField(ADCMDjangoAPISuite):
     maxDiff = None
@@ -879,6 +921,17 @@ class TestServiceConfig(ADCMDjangoAPISuite):
             response = self.client.v2[self.service_2, CONFIGS].get()
 
             self.assertEqual(response.status_code, HTTP_403_FORBIDDEN)
+
+    def test_json_config_error_with_display_name(self):
+        full_name = "/group/Pretty JSON"
+        config_data = self.client.v2[self.service_2, CONFIGS, self.service_2.config.current].get().json()
+        config_with_wrong_json = config_data | {"config": {"group": {"json": "{"}}}
+
+        expected_message = f"Value of '{full_name}' must be correct json string."
+        response = self.client.v2[self.service_2, CONFIGS].post(data=config_with_wrong_json)
+
+        self.assertEqual(response.status_code, HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json()["desc"], expected_message)
 
     def test_adcm_5756_500_on_non_required_field(self):
         service: Service = self.uc.add_services_to_cluster(["adcm_5756"], cluster=self.cluster_1)[0]
@@ -2803,20 +2856,27 @@ class TestConfigSchemaEnumWithoutValues(ADCMDjangoAPISuite):
                 "type": "object",
                 "properties": {
                     "variant": {
-                        "title": "variant",
-                        "description": "",
                         "default": None,
-                        "readOnly": False,
-                        "adcmMeta": {
-                            "isAdvanced": False,
-                            "isInvisible": False,
-                            "activation": None,
-                            "synchronization": None,
-                            "isSecret": False,
-                            "stringExtra": {"isMultiline": False},
-                            "enumExtra": None,
-                        },
-                        "enum": [None],
+                        "oneOf": [
+                            {
+                                "title": "variant",
+                                "description": "",
+                                "default": None,
+                                "readOnly": False,
+                                "adcmMeta": {
+                                    "isAdvanced": False,
+                                    "isInvisible": False,
+                                    "activation": None,
+                                    "synchronization": None,
+                                    "isSecret": False,
+                                    "stringExtra": {"isMultiline": False},
+                                    "enumExtra": None,
+                                },
+                                "enum": [None],
+                                "type": "string",
+                            },
+                            {"type": "null"},
+                        ],
                     }
                 },
                 "additionalProperties": False,

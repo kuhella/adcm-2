@@ -19,6 +19,7 @@ import type {
   ConfigurationTreeState,
   NodesDictionary,
   ConfigurationSelectableObject,
+  ConfigurationField,
 } from '../ConfigurationEditor.types';
 import {
   DEFAULT_JSON_SCHEMA_ENGINE,
@@ -76,6 +77,23 @@ export const getDefaultValue = (keyName: string, node: SchemaDefinition, parentN
   return nodeDefault ?? parentNodeDefault;
 };
 
+export const resolveFieldDefaultValue = (
+  field: Pick<ConfigurationField, 'defaultValue' | 'fieldSchema'>,
+): JSONPrimitive => {
+  if (field.defaultValue !== undefined) {
+    return field.defaultValue;
+  }
+
+  if (field.fieldSchema.default !== undefined) {
+    return field.fieldSchema.default as JSONPrimitive;
+  }
+
+  return undefined;
+};
+
+export const hasFieldDefaultValue = (field: Pick<ConfigurationField, 'defaultValue' | 'fieldSchema'>): boolean =>
+  resolveFieldDefaultValue(field) !== undefined;
+
 const getDefaultFieldSchema = (parentFieldSchema: SchemaDefinition | null): SchemaDefinition => {
   const fieldSchema: SchemaDefinition = {
     type: 'string',
@@ -129,12 +147,27 @@ const resolvePropertySchemaForObjectKey = (
   return getDefaultFieldSchema(parentFieldSchema);
 };
 
+const isRootReadOnlyLocked = (parentNode: ConfigurationNode): boolean => {
+  let node: ConfigurationNode = parentNode;
+
+  while (node.key !== rootNodeKey) {
+    node = node.data.parentNode;
+  }
+
+  // Root `isReadonly` is set from ConfigurationTree `isReadOnly` (wizard non-current step).
+  return node.data.isReadonly;
+};
+
 const getIsReadonly = (
   fieldSchema: SchemaDefinition,
   fieldAttributes: FieldAttributes,
   parentNode: ConfigurationNode,
 ) => {
   const parentNodeData = parentNode.data as ConfigurationObject | ConfigurationArray;
+
+  if (isRootReadOnlyLocked(parentNode)) {
+    return true;
+  }
 
   const isArrayItem = parentNodeData.fieldSchema.type === 'array';
   const isMapProperty = parentNode.data.type === 'object' && parentNode.data.objectType === 'map';
@@ -149,6 +182,11 @@ const getIsReadonly = (
 
   if (parentNodeData.fieldAttributes?.isSynchronized !== undefined) {
     return parentNodeData.fieldAttributes?.isSynchronized;
+  }
+
+  // selection_group: writable is per-field; do not inherit selection group isReadonly to subs.
+  if (parentNode.data.type === 'selectableObject') {
+    return Boolean(fieldSchema.readOnly);
   }
 
   return fieldSchema.readOnly || parentNodeData.isReadonly;
@@ -421,7 +459,7 @@ const buildObjectNode = (
       isReadonly,
       isDraggable,
       objectType: 'map',
-      defaultValue: getDefaultValue(title, fieldSchema, parentNode.data.fieldSchema) as JSONObject,
+      defaultValue: getDefaultValue(fieldName, fieldSchema, parentNode.data.fieldSchema) as JSONObject,
       value: fieldValue,
       fieldAttributes,
     },
@@ -482,7 +520,7 @@ const buildSelectableObjectNode = (
       isDeletable,
       isReadonly,
       isDraggable,
-      defaultValue: getDefaultValue(title, fieldSchema, parentNode.data.fieldSchema) as JSONObject,
+      defaultValue: getDefaultValue(fieldName, fieldSchema, parentNode.data.fieldSchema) as JSONObject,
       value: fieldValue,
       fieldAttributes,
     },
@@ -582,7 +620,7 @@ const buildFieldNode = (
       parentNode,
       fieldSchema,
       isNullable,
-      defaultValue: getDefaultValue(title, fieldSchema, parentNode.data.fieldSchema) as JSONPrimitive,
+      defaultValue: getDefaultValue(fieldName, fieldSchema, parentNode.data.fieldSchema) as JSONPrimitive,
       value: fieldValue as JSONPrimitive,
       isCleanable,
       isDeletable,
@@ -674,7 +712,7 @@ const buildArrayNode = (
       isCleanable,
       isDeletable,
       isDraggable,
-      defaultValue: getDefaultValue(title, fieldSchema, parentNode.data.fieldSchema) as JSONPrimitive,
+      defaultValue: getDefaultValue(fieldName, fieldSchema, parentNode.data.fieldSchema) as JSONPrimitive,
       value: array,
       fieldAttributes,
     },

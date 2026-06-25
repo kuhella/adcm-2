@@ -16,12 +16,14 @@ from core import mapping
 from core.legacy import bundle_alt, job  # noqa
 from core import bundle  # noqa
 from core import action  # noqa
+from core import adcm
 from core import upgrade
 from core import cluster, provider
 from core import logs
 
 __all__ = [
     "action",
+    "adcm",
     "bundle",
     "bundle_alt",
     "cluster",

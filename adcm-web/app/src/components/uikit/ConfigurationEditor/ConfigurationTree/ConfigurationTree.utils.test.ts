@@ -17,8 +17,12 @@ import {
   readonlyFieldSchema,
   readonlyListSchema,
   readonlyMapSchema,
+  readonlyStructureConfig,
+  readonlyStructureSchema,
   selectableObjectConfig,
   selectableObjectFieldSchemaWithUnionDefault,
+  selectableObjectReadonlyParentConfig,
+  selectableObjectReadonlyParentSchema,
   selectableObjectSchema,
   structureSchema,
   structureSchemaWithTitle,
@@ -33,6 +37,8 @@ import {
   getDefaultValue,
   getErrorsForTreeRow,
   getOneOfSchemaDefaults,
+  hasFieldDefaultValue,
+  resolveFieldDefaultValue,
   validate,
 } from './ConfigurationTree.utils';
 import type { ConfigurationArray, ConfigurationField, ConfigurationObject } from '../ConfigurationEditor.types';
@@ -104,6 +110,22 @@ describe('structure node tests', () => {
     expect(getDefaultValue('keyName', node3, parentNode3)).toBe('parentValue');
   });
 
+  test('resolveFieldDefaultValue', () => {
+    const fieldSchema: SchemaDefinition = { type: 'string', readOnly: false };
+
+    expect(resolveFieldDefaultValue({ defaultValue: 'from-node', fieldSchema })).toBe('from-node');
+    expect(resolveFieldDefaultValue({ fieldSchema: { ...fieldSchema, default: '' } })).toBe('');
+    expect(resolveFieldDefaultValue({ fieldSchema })).toBeUndefined();
+  });
+
+  test('hasFieldDefaultValue', () => {
+    const fieldSchema: SchemaDefinition = { type: 'string', readOnly: false };
+
+    expect(hasFieldDefaultValue({ defaultValue: '', fieldSchema })).toBe(true);
+    expect(hasFieldDefaultValue({ fieldSchema: { ...fieldSchema, default: '' } })).toBe(true);
+    expect(hasFieldDefaultValue({ fieldSchema })).toBe(false);
+  });
+
   test('structure fields', () => {
     const configuration = {
       structure: {
@@ -133,6 +155,15 @@ describe('structure node tests', () => {
     const tree = buildConfigurationNodes(schema, data, {});
     expect(tree.children?.length).toBe(2);
     expect(tree.children?.map((c) => c.key).sort()).toEqual(['/ab', '/cd']);
+  });
+
+  test('readonly structure propagates isReadonly to nested fields', () => {
+    const tree = buildConfigurationNodes(readonlyStructureSchema, readonlyStructureConfig, {});
+    const structureNode = tree.children?.[0]!;
+    const fieldNode = structureNode.children?.[0]!;
+
+    expect(structureNode.data.isReadonly).toBe(true);
+    expect(fieldNode.data.isReadonly).toBe(true);
   });
 });
 
@@ -660,6 +691,37 @@ describe('selection groups', () => {
     expect(clusterConfigNode.data.type).toStrictEqual('selectableObject');
     expect(clusterConfigNode.children?.[0].key.endsWith(discriminatorFieldName)).toBeTruthy();
     expect(clusterConfigNode.children?.[0].data.type).toStrictEqual('field');
+  });
+
+  test('nested field writable when selection group is read-only', () => {
+    const tree = buildConfigurationNodes(
+      selectableObjectReadonlyParentSchema,
+      selectableObjectReadonlyParentConfig,
+      {},
+    );
+    const selectionGroupNode = tree.children?.[0]!;
+    const groupNode = selectionGroupNode.children?.find((child) => child.key.endsWith('/group_1'))!;
+    const stringNode = groupNode.children?.find((child) => child.key.endsWith('/string'))!;
+
+    expect(selectionGroupNode.data.type).toBe('selectableObject');
+    expect(selectionGroupNode.data.isReadonly).toBe(true);
+    expect(groupNode.data.isReadonly).toBe(false);
+    expect(stringNode.data.isReadonly).toBe(false);
+  });
+
+  test('isReadOnly on root locks nested selectable subs (wizard non-current step)', () => {
+    const tree = buildConfigurationNodes(
+      selectableObjectReadonlyParentSchema,
+      selectableObjectReadonlyParentConfig,
+      {},
+      true,
+    );
+    const selectionGroupNode = tree.children?.[0]!;
+    const groupNode = selectionGroupNode.children?.find((child) => child.key.endsWith('/group_1'))!;
+    const stringNode = groupNode.children?.find((child) => child.key.endsWith('/string'))!;
+
+    expect(groupNode.data.isReadonly).toBe(true);
+    expect(stringNode.data.isReadonly).toBe(true);
   });
 });
 
