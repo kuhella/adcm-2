@@ -21,3 +21,8 @@ class MigrationMode(Enum):
 class SecretsSource(Enum):
     FILE_SYSTEM = auto()
     VAULT = auto()
+
+
+class TaskRunnerMode(Enum):
+    INSTANT = auto()
+    SCHEDULLER = auto()

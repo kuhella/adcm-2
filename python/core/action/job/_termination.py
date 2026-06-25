@@ -15,7 +15,8 @@ from typing import Protocol
 import os
 import signal
 
-from core.action._types import Job, Task
+from core.action import ExecutionStatus, Job, Task
+from core.action.job import JobRepoI, JobUpdateDTO, TaskUpdateDTO
 from core.result import Fail, Success
 
 
@@ -49,4 +50,12 @@ class DirectOSTerminationSignaller(TerminationSignaller):
 
 @dataclass(slots=True)
 class IndirectRepoTerminationSignaller(TerminationSignaller):
-    ...
+    repo: JobRepoI
+
+    def signal_termination_for_task(self, task: Task) -> Success[None] | Fail[str]:
+        self.repo.update_task(id=task.id, data=TaskUpdateDTO(status=ExecutionStatus.TERMINATING))
+        return Success(None)
+
+    def signal_termination_for_job(self, job: Job) -> Success[None] | Fail[str]:
+        self.repo.update_job(id=job.id, data=JobUpdateDTO(status=ExecutionStatus.TERMINATING))
+        return Success(None)

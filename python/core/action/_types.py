@@ -38,15 +38,29 @@ V = TypeVar("V")
 CT = TypeVar("CT", bound=ADCMCoreType)
 
 
-@dataclass(slots=True)
-class ExecutionEnvironment:
-    pid: int
-
-
 class ScriptType(str, Enum):
     ANSIBLE = "ansible"
     PYTHON = "python"
     INTERNAL = "internal"
+
+
+# str is required for pydantic to correctly cast enum to value when calling `.dict`
+class ExecutionStatus(str, Enum):
+    ABORTED = "aborted"
+    BROKEN = "broken"
+    CREATED = "created"
+    FAILED = "failed"
+    QUEUED = "queued"
+    REVOKED = "revoked"
+    RUNNING = "running"
+    SCHEDULED = "scheduled"
+    SUCCESS = "success"
+    TERMINATING = "terminating"
+
+
+@dataclass(slots=True)
+class ExecutionEnvironment:
+    pid: int
 
 
 class JobSpec(BaseModel):
@@ -107,19 +121,6 @@ class JobParams(BaseModel):
 
     ansible_tags: str
     rules: Annotated[list[HcAclRule], Field(default_factory=list)]
-
-
-# str is required for pydantic to correctly cast enum to value when calling `.dict`
-class ExecutionStatus(str, Enum):
-    REVOKED = "revoked"
-    CREATED = "created"
-    SCHEDULED = "scheduled"
-    QUEUED = "queued"
-    RUNNING = "running"
-    SUCCESS = "success"
-    FAILED = "failed"
-    ABORTED = "aborted"
-    BROKEN = "broken"
 
 
 class Job(BaseModel):
