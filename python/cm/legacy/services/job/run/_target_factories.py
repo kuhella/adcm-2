@@ -20,6 +20,8 @@ from typing import Any, Literal
 import json
 import traceback
 
+from django.conf import settings
+
 from core.cluster import ClusterService
 from core.legacy.cluster.types import ClusterTopology
 from core.legacy.job.dto import TaskUpdateDTO
@@ -725,6 +727,10 @@ def prepare_ansible_cfg(task: Task) -> ConfigParser:
         # we consider that if we got settings, they are of correct form (string values),
         # otherwise `deep_merge` might fail
         deep_merge(origin=config_parser, renovator=settings_to_override or {})
+
+    if not config_parser.has_section("defaults"):
+        config_parser["defaults"] = {}
+    config_parser["defaults"]["interpreter_python"] = f"{settings.ANSIBLE_VENV}/bin/python"
 
     return config_parser
 
