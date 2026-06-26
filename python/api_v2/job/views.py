@@ -11,6 +11,7 @@
 # limitations under the License.
 
 
+from django.db.transaction import atomic
 from adcm.permissions import VIEW_JOBLOG_PERMISSION
 from adcm.serializers import EmptySerializer
 from audit.alt.api import audit_update
@@ -99,7 +100,8 @@ class JobViewSet(PermissionListMixin, ListModelMixin, RetrieveModelMixin, ADCMGe
         self.get_object()
 
         try:
-            job_service.terminate_job(job_id=int(pk))
+            with atomic():
+                job_service.terminate_job(job_id=int(pk))
         except core.action.job.errors.JobValidationError as e:
             raise AdcmEx("NOT_ALLOWED_TERMINATION", e.message) from None
         except core.action.job.errors.JobTerminationError as e:

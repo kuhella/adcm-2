@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from django.db.transaction import atomic
 from adcm.permissions import VIEW_TASKLOG_PERMISSION
 from adcm.serializers import EmptySerializer
 from audit.alt.api import audit_update
@@ -151,7 +152,8 @@ class TaskViewSet(PermissionListMixin, ListModelMixin, RetrieveModelMixin, ADCMG
         self.get_object()
 
         try:
-            job_service.terminate_task(task_id=int(pk))
+            with atomic():
+                job_service.terminate_task(task_id=int(pk))
         except (core.action.job.errors.JobValidationError, core.action.job.errors.JobTerminationError) as e:
             raise AdcmEx("NOT_ALLOWED_TERMINATION", e.message) from None
         except NotFoundError:
