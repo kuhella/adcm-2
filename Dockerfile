@@ -84,7 +84,9 @@ COPY python/ansible_collections/arenadata/adcm/plugins /usr/share/ansible/plugin
 COPY python/ansible_collections/arenadata/adcm /root/.ansible/collections/ansible_collections/arenadata/adcm
 COPY python /adcm/python
 
-RUN ln -s -f /usr/local/bin/python3 /usr/bin/python3 && \
+RUN ln -s -f /usr/local/bin/python3.10 /usr/local/bin/python3 && \
+    ln -s -f /usr/local/bin/python3.10 /usr/local/bin/python && \
+    ln -s -f /usr/local/bin/python3.10 /usr/bin/python3 && \
     ln -s -f /usr/bin/python3 /usr/bin/python
 
 RUN ln -s /adcm/python/application/scripts/manage_secrets.py /adcm/python/manage_secrets.py
