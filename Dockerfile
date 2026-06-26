@@ -84,9 +84,7 @@ COPY python/ansible_collections/arenadata/adcm/plugins /usr/share/ansible/plugin
 COPY python/ansible_collections/arenadata/adcm /root/.ansible/collections/ansible_collections/arenadata/adcm
 COPY python /adcm/python
 
-RUN ln -s -f /usr/local/bin/python3.10 /usr/local/bin/python3 && \
-    ln -s -f /usr/local/bin/python3.10 /usr/local/bin/python && \
-    ln -s -f /usr/local/bin/python3.10 /usr/bin/python3 && \
+RUN ln -s -f /usr/local/bin/python3 /usr/bin/python3 && \
     ln -s -f /usr/bin/python3 /usr/bin/python
 
 RUN ln -s /adcm/python/application/scripts/manage_secrets.py /adcm/python/manage_secrets.py
@@ -96,6 +94,7 @@ RUN mkdir -p /adcm/data/log
 RUN DJANGO_SETTINGS_MODULE=adcm.settings_setups.build /adcm/.venv/bin/python /adcm/python/manage.py collectstatic --noinput
 
 ENV PYTHONPATH=/adcm/python
+ENV ANSIBLE_INTERPRETER_PYTHON=/venv/2.16/bin/python
 
 ARG ADCM_VERSION
 ENV ADCM_VERSION=$ADCM_VERSION
