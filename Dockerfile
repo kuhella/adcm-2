@@ -94,7 +94,6 @@ RUN mkdir -p /adcm/data/log
 RUN DJANGO_SETTINGS_MODULE=adcm.settings_setups.build /adcm/.venv/bin/python /adcm/python/manage.py collectstatic --noinput
 
 ENV PYTHONPATH=/adcm/python
-ENV ANSIBLE_INTERPRETER_PYTHON=/venv/2.16/bin/python
 
 ARG ADCM_VERSION
 ENV ADCM_VERSION=$ADCM_VERSION
