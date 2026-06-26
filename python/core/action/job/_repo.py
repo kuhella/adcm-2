@@ -30,6 +30,7 @@ from core.action._types import (
 from core.types import ActionID, ActionTargetDescriptor, CoreObjectDescriptor, HostGroupDescriptor, JobID, TaskID
 
 PreparedConfigValues: TypeAlias = dict[str, Any]
+HasChanged: TypeAlias = bool
 
 
 @dataclass(slots=True)
@@ -163,6 +164,18 @@ class JobRepoI(Protocol):
     # update
 
     def fill_task_mapping_and_configuration(self, task_id: TaskID, payload: TaskUpdateMainFieldsDTO) -> None:
+        ...
+
+    def change_task_status(self, id: TaskID, previous: ExecutionStatus, new: ExecutionStatus) -> HasChanged: # noqa: A002 
+        """
+        Change task's status from `previous` to `new`, return flag if change was performed
+        """
+        ...
+
+    def change_job_status(self, id: JobID, previous: ExecutionStatus, new: ExecutionStatus) -> HasChanged: # noqa: A002
+        """
+        Change job's status from `previous` to `new`, return flag if change was performed
+        """
         ...
 
     def update_task(self, id: int, data: TaskUpdateDTO) -> None:  # noqa: A002

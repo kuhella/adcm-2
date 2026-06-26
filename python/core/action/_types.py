@@ -52,6 +52,7 @@ class ExecutionStatus(str, Enum):
     FAILED = "failed"
     QUEUED = "queued"
     REVOKED = "revoked"
+    REVOKING = "revoking"
     RUNNING = "running"
     SCHEDULED = "scheduled"
     SUCCESS = "success"

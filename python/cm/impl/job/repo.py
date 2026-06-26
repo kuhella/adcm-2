@@ -376,6 +376,14 @@ class JobRepo(JobRepoI):
 
         JobLog.objects.filter(id=id).update(**fields_to_change)
 
+    def change_task_status(self, id: TaskID, previous: ExecutionStatus, new: ExecutionStatus) -> bool: # noqa: A002 
+        updated = TaskLog.objects.filter(id=id, status=previous).update(status=new)
+        return bool(updated)
+
+    def change_job_status(self, id: JobID, previous: ExecutionStatus, new: ExecutionStatus) -> bool: # noqa: A002
+        updated = JobLog.objects.filter(id=id, status=previous).update(status=new)
+        return bool(updated)
+
     # misc
 
     def close_old_connections(self) -> None:

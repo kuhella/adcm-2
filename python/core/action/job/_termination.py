@@ -53,9 +53,21 @@ class IndirectRepoTerminationSignaller(TerminationSignaller):
     repo: JobRepoI
 
     def signal_termination_for_task(self, task: Task) -> Success[None] | Fail[str]:
-        self.repo.update_task(id=task.id, data=TaskUpdateDTO(status=ExecutionStatus.TERMINATING))
-        return Success(None)
+        new_status = ExecutionStatus.REVOKED if task.status == ExecutionStatus.CREATED else ExecutionStatus.REVOKING 
+        changed = self.repo.change_task_status(id=task.id, previous=task.status, new=new_status)
+        match changed:
+            case True:
+                return Success(None)
+            case False:
+                return Fail("task termination failed due to status change, try again later") 
 
     def signal_termination_for_job(self, job: Job) -> Success[None] | Fail[str]:
-        self.repo.update_job(id=job.id, data=JobUpdateDTO(status=ExecutionStatus.TERMINATING))
-        return Success(None)
+        new_status = ExecutionStatus.REVOKED if job.status == ExecutionStatus.CREATED else ExecutionStatus.REVOKING 
+        changed = self.repo.change_job_status(id=job.id, previous=job.status, new=new_status)
+        match changed:
+            case True:
+                return Success(None)
+            case False:
+                return Fail("job termination failed due to status change, try again later") 
+
+
