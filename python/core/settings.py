@@ -21,6 +21,7 @@ class Directories:
     # main ones
     base: Path
     stack: Path
+    ansible_venv: Path
 
     # subdirs
     bundles: Path
