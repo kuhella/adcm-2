@@ -18,6 +18,7 @@ from celery.utils.nodenames import gethostname
 from jobs.scheduler._types import UTC, CeleryTaskState
 from jobs.scheduler.logger import logger
 from jobs.worker.celery import custom_settings, repo
+from jobs.worker.celery.consul import registrar
 from jobs.worker.celery.consul import settings as consul_settings
 from jobs.worker.celery.consul.control import ConsulControl, ConsulInspect
 from jobs.worker.celery.models import DBTables
@@ -69,8 +70,19 @@ class InspectionMixin:
 
     def ping(self) -> set[str]:
         """
-        Returns set of alive (there are timestamps not further than `2 * heartbeat_interval` seconds) celery workers.
+        Returns set of alive celery workers.
+
+        When Consul is configured (FR2), active workers are discovered from the
+        Consul service catalog (instances of the ``celery`` service whose TTL
+        health check is passing). Otherwise the database heartbeat table is used
+        (workers with a timestamp not further than ``2 * heartbeat_interval``).
         """
+        if consul_settings.is_consul_configured():
+            try:
+                return registrar.discover_active_workers()
+            except Exception:  # noqa: BLE001
+                logger.error("Failed to discover active workers from Consul; falling back to DB heartbeat")
+
         threshold = datetime.now(tz=UTC) - self._interval
 
         return repo.retrieve_alive_workers(threshold=threshold)

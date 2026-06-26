@@ -61,13 +61,23 @@ class ClientSettings:
 
 @dataclass(slots=True)
 class ServiceRegistration:
-    """Payload describing the ADCM service to register in Consul."""
+    """Payload describing a service to register in Consul.
+
+    Two health-check styles are supported:
+
+    * HTTP check - set ``health_check_url`` (suited for HTTP services, requires
+      ``address`` / ``port``).
+    * TTL check - set ``check_ttl`` (suited for non-HTTP services like Celery
+      workers that report liveness themselves). ``address`` / ``port`` are
+      omitted from the payload when not provided.
+    """
 
     service_id: str
-    address: str
-    port: int
-    health_check_url: str
     name: str
+    address: str | None = None
+    port: int | None = None
+    health_check_url: str | None = None
+    check_ttl: str | None = None
     datacenter: str | None = None
     tags: list[str] = field(default_factory=list)
     meta: dict[str, str] = field(default_factory=dict)
@@ -75,26 +85,40 @@ class ServiceRegistration:
     check_timeout: str = DEFAULT_HEALTH_CHECK_TIMEOUT
     deregister_critical_service_after: str = DEFAULT_DEREGISTER_CRITICAL_SERVICE_AFTER
 
+    @property
+    def ttl_check_id(self) -> str:
+        """Stable check id used to update this service's TTL check."""
+        return f"service:{self.service_id}:ttl"
+
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "ID": self.service_id,
             "Name": self.name,
             "Tags": list(self.tags),
-            "Address": self.address,
-            "Port": self.port,
             "Meta": dict(self.meta),
-            "Checks": [
-                {
-                    "HTTP": self.health_check_url,
-                    "Interval": self.check_interval,
-                    "Timeout": self.check_timeout,
-                    "DeregisterCriticalServiceAfter": self.deregister_critical_service_after,
-                }
-            ],
+            "Checks": [self._build_check()],
         }
+        if self.address is not None:
+            payload["Address"] = self.address
+        if self.port is not None:
+            payload["Port"] = self.port
         if self.datacenter:
             payload["Datacenter"] = self.datacenter
         return payload
+
+    def _build_check(self) -> dict[str, Any]:
+        if self.check_ttl is not None:
+            return {
+                "CheckID": self.ttl_check_id,
+                "TTL": self.check_ttl,
+                "DeregisterCriticalServiceAfter": self.deregister_critical_service_after,
+            }
+        return {
+            "HTTP": self.health_check_url,
+            "Interval": self.check_interval,
+            "Timeout": self.check_timeout,
+            "DeregisterCriticalServiceAfter": self.deregister_critical_service_after,
+        }
 
 
 class ConsulBackend:
@@ -171,6 +195,38 @@ class ConsulBackend:
                 f"Failed to deregister service in Consul: status={response.status_code} body={response.text!r}"
             )
 
+    def pass_check(self, check_id: str, note: str = "") -> None:
+        """Mark a TTL check as passing, resetting its expiration timer."""
+        url = f"{self._base_url}/v1/agent/check/pass/{check_id}"
+        params = self._query()
+        if note:
+            params["note"] = note
+        try:
+            response = self._session.put(url, params=params, timeout=self._timeout)
+        except RequestException as error:
+            raise ConsulError(f"Failed to pass Consul check {check_id!r}: {error}") from error
+
+        if not response.ok:
+            raise ConsulError(
+                f"Failed to pass Consul check {check_id!r}: status={response.status_code} body={response.text!r}"
+            )
+
+    def get_healthy_service_ids(self, name: str) -> set[str]:
+        """Return ids of instances of service ``name`` whose checks are all passing."""
+        url = f"{self._base_url}/v1/health/service/{name}"
+        try:
+            response = self._session.get(url, params=self._query(passing="true"), timeout=self._timeout)
+        except RequestException as error:
+            raise ConsulError(f"Failed to query Consul service {name!r}: {error}") from error
+
+        if not response.ok:
+            raise ConsulError(
+                f"Failed to query Consul service {name!r}: status={response.status_code} body={response.text!r}"
+            )
+
+        entries = response.json() or []
+        return {service_id for entry in entries if (service_id := entry.get("Service", {}).get("ID"))}
+
     def check_connection(self) -> bool:
         """Return ``True`` when the Consul agent is reachable and responsive."""
         url = f"{self._base_url}/v1/status/leader"
@@ -184,5 +240,9 @@ class ConsulBackend:
     def close(self) -> None:
         self._session.close()
 
-    def _query(self) -> dict[str, str]:
-        return {"dc": self._settings.datacenter} if self._settings.datacenter else {}
+    def _query(self, **extra: str) -> dict[str, str]:
+        params: dict[str, str] = {}
+        if self._settings.datacenter:
+            params["dc"] = self._settings.datacenter
+        params.update(extra)
+        return params
