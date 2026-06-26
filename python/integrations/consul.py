@@ -21,9 +21,11 @@ mutual-TLS for ``https``.
 
 from __future__ import annotations
 
+from base64 import b64decode
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any, ClassVar
+import json as jsonlib
 
 from requests import RequestException, Session
 from requests.adapters import HTTPAdapter
@@ -227,6 +229,87 @@ class ConsulBackend:
         entries = response.json() or []
         return {service_id for entry in entries if (service_id := entry.get("Service", {}).get("ID"))}
 
+    def kv_put(self, key: str, value: Any) -> None:
+        """Store ``value`` at KV ``key``. ``value`` is json-encoded automatically."""
+        url = f"{self._base_url}/v1/kv/{_clean_kv_key(key)}"
+        try:
+            response = self._session.put(url, params=self._query(), data=_encode_kv_value(value), timeout=self._timeout)
+        except RequestException as error:
+            raise ConsulError(f"Failed to PUT Consul kv {key!r}: {error}") from error
+
+        if not response.ok or response.text.strip() != "true":
+            raise ConsulError(f"Failed to PUT Consul kv {key!r}: status={response.status_code} body={response.text!r}")
+
+    def kv_get(self, key: str) -> Any | None:
+        """Fetch the value at KV ``key`` or ``None`` if it does not exist."""
+        url = f"{self._base_url}/v1/kv/{_clean_kv_key(key)}"
+        try:
+            response = self._session.get(url, params=self._query(), timeout=self._timeout)
+        except RequestException as error:
+            raise ConsulError(f"Failed to GET Consul kv {key!r}: {error}") from error
+
+        if response.status_code == 404:
+            return None
+        if not response.ok:
+            raise ConsulError(f"Failed to GET Consul kv {key!r}: status={response.status_code} body={response.text!r}")
+
+        payload = response.json()
+        if not payload:
+            return None
+        return _decode_kv_value(payload[0].get("Value"))
+
+    def kv_list_keys(self, prefix: str) -> list[str]:
+        """Return the full list of keys under ``prefix`` (recursive)."""
+        url = f"{self._base_url}/v1/kv/{_clean_kv_key(prefix)}"
+        try:
+            response = self._session.get(url, params=self._query(keys="true"), timeout=self._timeout)
+        except RequestException as error:
+            raise ConsulError(f"Failed to LIST Consul kv {prefix!r}: {error}") from error
+
+        if response.status_code == 404:
+            return []
+        if not response.ok:
+            raise ConsulError(
+                f"Failed to LIST Consul kv {prefix!r}: status={response.status_code} body={response.text!r}"
+            )
+
+        data = response.json()
+        return list(data) if data else []
+
+    def kv_list_pairs(self, prefix: str) -> dict[str, Any]:
+        """Return ``{key: value}`` for every key under ``prefix`` (recursive)."""
+        url = f"{self._base_url}/v1/kv/{_clean_kv_key(prefix)}"
+        try:
+            response = self._session.get(url, params=self._query(recurse="true"), timeout=self._timeout)
+        except RequestException as error:
+            raise ConsulError(f"Failed to RECURSE Consul kv {prefix!r}: {error}") from error
+
+        if response.status_code == 404:
+            return {}
+        if not response.ok:
+            raise ConsulError(
+                f"Failed to RECURSE Consul kv {prefix!r}: status={response.status_code} body={response.text!r}"
+            )
+
+        payload = response.json() or []
+        return {entry["Key"]: _decode_kv_value(entry.get("Value")) for entry in payload}
+
+    def kv_delete(self, key: str, *, recurse: bool = False) -> None:
+        """Delete KV ``key`` (or everything under it when ``recurse`` is true)."""
+        url = f"{self._base_url}/v1/kv/{_clean_kv_key(key)}"
+        params = self._query()
+        if recurse:
+            params["recurse"] = "true"
+        try:
+            response = self._session.delete(url, params=params, timeout=self._timeout)
+        except RequestException as error:
+            raise ConsulError(f"Failed to DELETE Consul kv {key!r}: {error}") from error
+
+        if not response.ok:
+            raise ConsulError(
+                f"Failed to DELETE Consul kv {key!r}: status={response.status_code} body={response.text!r}"
+            )
+
     def check_connection(self) -> bool:
         """Return ``True`` when the Consul agent is reachable and responsive."""
         url = f"{self._base_url}/v1/status/leader"
@@ -246,3 +329,27 @@ class ConsulBackend:
             params["dc"] = self._settings.datacenter
         params.update(extra)
         return params
+
+
+def _encode_kv_value(value: Any) -> bytes:
+    """Serialize a python value to the json bytes Consul stores for a KV key."""
+    return jsonlib.dumps(value, ensure_ascii=False, default=str).encode("utf-8")
+
+
+def _decode_kv_value(raw: str | None) -> Any:
+    """Decode the base64 ``Value`` returned by Consul back into a python value.
+
+    Falls back to the raw string when the stored value is not valid json.
+    """
+    if raw is None:
+        return None
+    decoded = b64decode(raw).decode("utf-8")
+    try:
+        return jsonlib.loads(decoded)
+    except jsonlib.JSONDecodeError:
+        return decoded
+
+
+def _clean_kv_key(key: str) -> str:
+    """Strip a leading slash so KV keys are stored without an empty root segment."""
+    return key.lstrip("/")

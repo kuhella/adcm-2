@@ -10,8 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from base64 import b64encode
 from typing import Any
 from unittest import TestCase
+import json
 
 from integrations.consul import ClientSettings, ConsulBackend, ConsulError, ServiceRegistration
 
@@ -167,3 +169,114 @@ class TestConsulBackend(TestCase):
         session.responses.append(FakeResponse(json_data=[]))
 
         self.assertEqual(backend.get_healthy_service_ids("celery"), set())
+
+
+def _encoded(value: Any) -> str:
+    return b64encode(json.dumps(value).encode("utf-8")).decode("ascii")
+
+
+class TestConsulBackendKV(TestCase):
+    def test_kv_put(self) -> None:
+        backend, session = make_backend(datacenter="dc1")
+        session.responses.append(FakeResponse(text="true"))
+
+        backend.kv_put("/control/commands/cmd-1", {"method": "ping"})
+
+        call = session.calls[0]
+        self.assertEqual(call["method"], "PUT")
+        self.assertTrue(call["url"].endswith("/v1/kv/control/commands/cmd-1"))
+        self.assertEqual(call["params"], {"dc": "dc1"})
+        self.assertEqual(json.loads(call["data"].decode("utf-8")), {"method": "ping"})
+
+    def test_kv_put_raises_on_error(self) -> None:
+        backend, session = make_backend()
+        session.responses.append(FakeResponse(ok=False, status_code=500, text="boom"))
+
+        with self.assertRaises(ConsulError):
+            backend.kv_put("key", {"a": 1})
+
+    def test_kv_put_raises_when_body_not_true(self) -> None:
+        backend, session = make_backend()
+        session.responses.append(FakeResponse(text="false"))
+
+        with self.assertRaises(ConsulError):
+            backend.kv_put("key", {"a": 1})
+
+    def test_kv_get(self) -> None:
+        backend, session = make_backend()
+        session.responses.append(FakeResponse(json_data=[{"Key": "key", "Value": _encoded({"ok": True})}]))
+
+        self.assertEqual(backend.kv_get("key"), {"ok": True})
+
+    def test_kv_get_missing_returns_none(self) -> None:
+        backend, session = make_backend()
+        session.responses.append(FakeResponse(ok=False, status_code=404, text="Not Found"))
+
+        self.assertIsNone(backend.kv_get("missing"))
+
+    def test_kv_get_raises_on_error(self) -> None:
+        backend, session = make_backend()
+        session.responses.append(FakeResponse(ok=False, status_code=500, text="boom"))
+
+        with self.assertRaises(ConsulError):
+            backend.kv_get("key")
+
+    def test_kv_list_keys(self) -> None:
+        backend, session = make_backend()
+        session.responses.append(FakeResponse(json_data=["control/a", "control/b"]))
+
+        self.assertEqual(backend.kv_list_keys("control/"), ["control/a", "control/b"])
+        self.assertEqual(session.calls[0]["params"], {"keys": "true"})
+
+    def test_kv_list_keys_missing_returns_empty(self) -> None:
+        backend, session = make_backend()
+        session.responses.append(FakeResponse(ok=False, status_code=404, text="Not Found"))
+
+        self.assertEqual(backend.kv_list_keys("control/"), [])
+
+    def test_kv_list_pairs(self) -> None:
+        backend, session = make_backend()
+        session.responses.append(
+            FakeResponse(
+                json_data=[
+                    {"Key": "control/a", "Value": _encoded({"n": 1})},
+                    {"Key": "control/b", "Value": _encoded({"n": 2})},
+                ]
+            )
+        )
+
+        self.assertEqual(
+            backend.kv_list_pairs("control/"),
+            {"control/a": {"n": 1}, "control/b": {"n": 2}},
+        )
+        self.assertEqual(session.calls[0]["params"], {"recurse": "true"})
+
+    def test_kv_list_pairs_missing_returns_empty(self) -> None:
+        backend, session = make_backend()
+        session.responses.append(FakeResponse(ok=False, status_code=404, text="Not Found"))
+
+        self.assertEqual(backend.kv_list_pairs("control/"), {})
+
+    def test_kv_delete(self) -> None:
+        backend, session = make_backend()
+
+        backend.kv_delete("key")
+
+        call = session.calls[0]
+        self.assertEqual(call["method"], "DELETE")
+        self.assertTrue(call["url"].endswith("/v1/kv/key"))
+        self.assertNotIn("recurse", call["params"])
+
+    def test_kv_delete_recurse(self) -> None:
+        backend, session = make_backend()
+
+        backend.kv_delete("control/", recurse=True)
+
+        self.assertEqual(session.calls[0]["params"], {"recurse": "true"})
+
+    def test_kv_delete_raises_on_error(self) -> None:
+        backend, session = make_backend()
+        session.responses.append(FakeResponse(ok=False, status_code=500, text="boom"))
+
+        with self.assertRaises(ConsulError):
+            backend.kv_delete("key")
