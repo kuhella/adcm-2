@@ -28,19 +28,20 @@ RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
     uv sync --python 3.12 --group run --locked
 
 # Prepare self-contained Ansible venv (Python 3.10)
-# 1. Copy pre-built ansible venv
+# 1. Copy pre-built ansible venv and Python 3.10 runtime
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /venv/2.16 /venv/2.16
-# 2. Embed Python 3.10 runtime inside the venv (not in system paths)
-COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/bin/python3.10 /venv/2.16/bin/python3.10
+COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/bin/python3.10 /tmp/python3.10-real
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/lib/python3.10 /venv/2.16/lib/python3.10
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/lib/libpython3.10.so* /venv/2.16/lib/
 COPY --from=hub.adsw.io/ansible/ansible:2.16.4-python3.10-develop /usr/local/include/python3.10 /venv/2.16/include/python3.10
-# 3. Fix venv symlinks to use embedded Python 3.10
-RUN rm -f /venv/2.16/bin/python /venv/2.16/bin/python3 && \
+# 2. Replace venv symlinks with embedded Python 3.10 binary
+RUN rm -f /venv/2.16/bin/python /venv/2.16/bin/python3 /venv/2.16/bin/python3.10 && \
+    mv /tmp/python3.10-real /venv/2.16/bin/python3.10 && \
+    chmod +x /venv/2.16/bin/python3.10 && \
     ln -s python3.10 /venv/2.16/bin/python3 && \
     ln -s python3 /venv/2.16/bin/python && \
     sed -i 's|^home = .*|home = /venv/2.16/bin|' /venv/2.16/pyvenv.cfg
-# 4. Install ADCM modules into the Ansible venv
+# 3. Install ADCM modules into the Ansible venv
 RUN --mount=from=ghcr.io/astral-sh/uv,source=/uv,target=/bin/uv \
     --mount=type=bind,source=ansible-2.16-python3.10-dependencies.txt,target=ansible-2.16-python3.10-dependencies.txt \
     LD_LIBRARY_PATH=/venv/2.16/lib \
