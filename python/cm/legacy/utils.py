@@ -15,6 +15,8 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 import os
 
+from django.conf import settings
+
 from cm.legacy.adcm_config.ansible import ansible_decrypt
 
 if TYPE_CHECKING:
@@ -49,9 +51,12 @@ def get_env_with_venv_path(venv: str, existing_env: dict | None = None) -> dict:
     if existing_env is None:
         existing_env = os.environ.copy()
 
+    ansible_venv = str(settings.ANSIBLE_VENV)
+
     # TODO From time to time, we explicitly use environments to launch playbooks,
     #  regardless of which one was specified. Fixed before release 3.0.0
-    existing_env["PATH"] = f"/venv/2.16/bin:{existing_env['PATH']}"
+    existing_env["PATH"] = f"{ansible_venv}/bin:{existing_env['PATH']}"
+    existing_env["LD_LIBRARY_PATH"] = f"{ansible_venv}/lib:{existing_env.get('LD_LIBRARY_PATH', '')}".rstrip(":")
 
     # if venv != "default":
     #     existing_env["PATH"] = f"/venv/{venv}/bin:{existing_env['PATH']}"

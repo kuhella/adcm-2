@@ -288,6 +288,7 @@ class TestActionParams(ADCMDjangoAPISuite):
                 ("deprecation_warnings", "False"),
                 ("callback_whitelist", "profile_tasks"),
                 ("forks", "5"),
+                ("interpreter_python", f"{settings.ANSIBLE_VENV}/bin/python"),
             ),
             "ssh_connection": (("retries", "3"), ("pipelining", "True")),
         }

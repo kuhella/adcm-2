@@ -29,6 +29,7 @@ from core.legacy.job.types import AssociatedProcess, HcAclRule, Job, ScriptType,
 from core.logs import LogsService
 from core.scenarios.config import ConfigScenarios
 from core.types import ADCMCoreType, ClusterID, ComponentNameKey
+from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
@@ -725,6 +726,10 @@ def prepare_ansible_cfg(task: Task) -> ConfigParser:
         # we consider that if we got settings, they are of correct form (string values),
         # otherwise `deep_merge` might fail
         deep_merge(origin=config_parser, renovator=settings_to_override or {})
+
+    if not config_parser.has_option("defaults", "interpreter_python"):
+        config_parser.setdefault("defaults", {})
+        config_parser["defaults"]["interpreter_python"] = f"{settings.ANSIBLE_VENV}/bin/python"
 
     return config_parser
 
