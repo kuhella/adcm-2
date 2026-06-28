@@ -190,6 +190,7 @@ def prepare_process_bound_directories() -> Directories:
     return Directories(
         base=root,
         stack=root,
+        ansible_venv=Path("/venv/2.16"),
         bundles=root / "bundle",
         downloads=root / "download",
         files=root / "file",

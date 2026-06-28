@@ -158,6 +158,7 @@ def build_config_service_with_fakes() -> tuple[ConfigService, FakeRepo]:
     directories = Directories(
         base=path,
         stack=path,
+        ansible_venv=path,
         bundles=path,
         downloads=path,
         files=path,

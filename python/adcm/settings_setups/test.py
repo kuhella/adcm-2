@@ -49,6 +49,7 @@ FILE_DIR = DATA_DIR / "file"
 LOG_DIR = DATA_DIR / "log"
 TMP_DIR = DATA_DIR / "tmp"
 CODE_DIR = pathlib.Path(__file__).parent.parent.parent
+ANSIBLE_VENV = pathlib.Path("/venv/2.16")
 
 DEFAULT_DISHKA_PROVIDERS = "tests.dependencies.get_default_overridden_providers"
 
