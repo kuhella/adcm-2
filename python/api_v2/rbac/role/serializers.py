@@ -84,14 +84,11 @@ class RoleRelatedSerializer(ModelSerializer):
 
 class ObjectCandidateSerializer(EmptySerializer):
     id = IntegerField()
+    uuid = CharField()
     name = CharField()
 
 
-class ObjectCandidateWithUuidSerializer(ObjectCandidateSerializer):
-    uuid = CharField()
-
-
-class ClusterObjectCandidateSerializer(ObjectCandidateWithUuidSerializer):
+class ClusterObjectCandidateSerializer(ObjectCandidateSerializer):
     ...
 
 
@@ -106,7 +103,7 @@ class ProviderObjectCandidateSerializer(ObjectCandidateSerializer):
     ...
 
 
-class HostObjectCandidateSerializer(ObjectCandidateWithUuidSerializer):
+class HostObjectCandidateSerializer(ObjectCandidateSerializer):
     ...
 
 
