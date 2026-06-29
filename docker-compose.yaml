@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:14
+    restart: always
+    environment:
+      POSTGRES_USER: adcm
+      POSTGRES_PASSWORD: adcmpassword
+      POSTGRES_DB: adcm
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adcm -d adcm"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  adcm:
+    image: ${ADCM_IMAGE:-hub.arenadata.io/adcm/adcm:latest}
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: adcm
+      DB_PASS: adcmpassword
+      DB_NAME: adcm
+      LOG_LEVEL: ${LOG_LEVEL:-ERROR}
+    volumes:
+      - adcm_data:/adcm/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  adcm_data:

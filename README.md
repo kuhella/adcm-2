@@ -82,75 +82,61 @@ pre-commit install
 
 After this you will see invocation of black and pylint on every commit.
 
-## Running ADCM using SQLite
+## Running ADCM in Docker
 
-1. Start container:
+_PostgreSQL 13 or newer is required._
 
-    ```shell
-    docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data --name adcm hub.arenadata.io/adcm/adcm:latest
-    ```
+A `docker-compose.yaml` is provided at the repository root. It starts ADCM together with a PostgreSQL 14 instance.
 
-    Use `-v /opt/adcm:/adcm/data:Z` for SELinux
+### Quick start
 
-## Running ADCM using client PostgreSQL DB
-_PostgreSQL must be version 13 or newer - JSONB field used_
+```shell
+docker compose up -d
+```
 
-1. Start container:
-   ```shell
-   docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data 
-   -e DB_HOST="DATABASE_HOSTNAME_OR_IP_ADDRESS" -e DB_PORT="DATABASE_TCP_PORT" 
-   -e DB_USER="DATABASE_USERNAME" -e DB_NAME="DATABASE_NAME" 
-   -e DB_PASS="DATABASE_USER_PASSWORD" --name adcm hub.arenadata.io/adcm/adcm:latest
-   ```
-   Use `-v /opt/adcm:/adcm/data:Z` for SELinux
-   Target PostgreSQL DB must not have DB with name `DATABASE_NAME`
-   Note that DB_PORT is optional and has default value 5432
+ADCM will be available at `http://localhost:8000` once the containers are ready.
 
-## Migrate SQLite -> client PostgreSQL
->__NOTE__: `adcm` is the ADCM's container name. 
-1. Dump SQLite DB to file:
-   ```shell
-   docker exec -it adcm /adcm/python/manage.py dumpdata --natural-foreign --natural-primary -o /adcm/data/var/data.json
-   ```
-2. Stop container:
-   ```shell
-   docker stop adcm
-   docker rm adcm
-   ```
-3. Start container in `MIGRATION_MODE`:
-   ```shell
-   docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data 
-   -e DB_HOST="DATABASE_HOSTNAME_OR_IP_ADDRESS" -e DB_PORT="DATABASE_TCP_PORT" 
-   -e DB_USER="DATABASE_USERNAME" -e DB_NAME="DATABASE_NAME" 
-   -e DB_PASS="DATABASE_USER_PASSWORD" -e MIGRATION_MODE=1
-   --name adcm hub.arenadata.io/adcm/adcm:latest
-   ```
-   Use `-v /opt/adcm:/adcm/data:Z` for SELinux
-   Target PostgreSQL DB must not have DB with name `DATABASE_NAME`
-4. Load dumped SQLite DB data to PostgreSQL
-   ```shell
-   docker exec -it adcm /adcm/python/manage.py loaddata /adcm/data/var/data.json
-   ```
-5. Stop container:
-   ```shell
-   docker stop adcm
-   docker rm adcm
-   ```
-6. Start container:
-   ```shell
-   docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data 
-   -e DB_HOST="DATABASE_HOSTNAME_OR_IP_ADDRESS" -e DB_PORT="DATABASE_TCP_PORT" 
-   -e DB_USER="DATABASE_USERNAME" -e DB_NAME="DATABASE_NAME" 
-   -e DB_PASS="DATABASE_USER_PASSWORD" -e MIGRATION_MODE=0
-   --name adcm hub.arenadata.io/adcm/adcm:latest
-   ```
+To stop and remove the containers:
 
-## Set log level
-1. add `-e` option to `docker run` command:
-   ```shell
-   docker run ... -e LOG_LEVEL="INFO"
-   ```
-   
-   valid choices are: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
+```shell
+docker compose down
+```
 
-   defaults to `ERROR`
+To also remove the data volumes:
+
+```shell
+docker compose down -v
+```
+
+### Using a custom ADCM image
+
+If you built a local image with `make build`, override the image in the compose file:
+
+```shell
+ADCM_IMAGE=hub.adsw.io/adcm/adcm:my_branch docker compose up -d
+```
+
+Or edit the `image` field in `docker-compose.yaml` directly.
+
+### Using an existing PostgreSQL instance
+
+If you already have a running PostgreSQL server, you can start just the ADCM container:
+
+```shell
+docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data \
+  -e DB_HOST="DATABASE_HOSTNAME_OR_IP_ADDRESS" -e DB_PORT="DATABASE_TCP_PORT" \
+  -e DB_USER="DATABASE_USERNAME" -e DB_NAME="DATABASE_NAME" \
+  -e DB_PASS="DATABASE_USER_PASSWORD" --name adcm hub.arenadata.io/adcm/adcm:latest
+```
+
+All database environment variables (`DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`) are mandatory. `DB_PORT` is optional and defaults to `5432`.
+
+### Set log level
+
+Add `LOG_LEVEL` to the `environment` section in `docker-compose.yaml` or pass it via the command line:
+
+```shell
+LOG_LEVEL=INFO docker compose up -d
+```
+
+Valid choices: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (defaults to `ERROR`).
