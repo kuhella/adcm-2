@@ -106,21 +106,20 @@ pre-commit install
 
 ### Running in Docker
 
-PostgreSQL 13 or newer is required. All database environment variables (`DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`) are mandatory.
+PostgreSQL 13 or newer is required. A `docker-compose.yaml` at the repository root starts ADCM with PostgreSQL 14.
 
-**Quick start with a PostgreSQL container:**
+**Quick start:**
 ```sh
-# Create network and start PostgreSQL
-docker network create adcm-net
-docker run -d --restart=always --network adcm-net --name adcm-pg \
-  -e POSTGRES_USER=adcm -e POSTGRES_PASSWORD=adcmpassword -e POSTGRES_DB=adcm \
-  postgres:14
+docker compose up -d
+# ADCM available at http://localhost:8000
 
-# Start ADCM
-docker run -d --restart=always --network adcm-net -p 8000:8000 \
-  -v /opt/adcm:/adcm/data \
-  -e DB_HOST=adcm-pg -e DB_USER=adcm -e DB_PASS=adcmpassword -e DB_NAME=adcm \
-  --name adcm hub.arenadata.io/adcm/adcm:latest
+docker compose down      # stop containers
+docker compose down -v   # stop and remove data volumes
+```
+
+**Using a custom ADCM image (e.g. after `make build`):**
+```sh
+ADCM_IMAGE=hub.adsw.io/adcm/adcm:my_branch docker compose up -d
 ```
 
 **Using an existing PostgreSQL instance:**
@@ -131,9 +130,9 @@ docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data \
   --name adcm hub.arenadata.io/adcm/adcm:latest
 ```
 
-`DB_PORT` is optional and defaults to `5432`.
+All database env vars (`DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`) are mandatory. `DB_PORT` defaults to `5432`.
 
-**Set log level:** Add `-e LOG_LEVEL="DEBUG|INFO|WARNING|ERROR|CRITICAL"` (defaults to `ERROR`).
+**Set log level:** Add `LOG_LEVEL` to the compose `environment` or pass `LOG_LEVEL=INFO docker compose up -d`. Valid choices: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (defaults to `ERROR`).
 
 ## Development Conventions
 

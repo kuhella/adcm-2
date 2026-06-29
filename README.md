@@ -84,36 +84,43 @@ After this you will see invocation of black and pylint on every commit.
 
 ## Running ADCM in Docker
 
-_PostgreSQL 13 or newer is required. All database environment variables (`DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`) are mandatory._
+_PostgreSQL 13 or newer is required._
 
-### Quick start with a PostgreSQL container
+A `docker-compose.yaml` is provided at the repository root. It starts ADCM together with a PostgreSQL 14 instance.
 
-1. Create a Docker network:
-   ```shell
-   docker network create adcm-net
-   ```
+### Quick start
 
-2. Start a PostgreSQL container:
-   ```shell
-   docker run -d --restart=always --network adcm-net --name adcm-pg \
-     -e POSTGRES_USER=adcm -e POSTGRES_PASSWORD=adcmpassword -e POSTGRES_DB=adcm \
-     -v /opt/adcm-pg:/var/lib/postgresql/data \
-     postgres:14
-   ```
+```shell
+docker compose up -d
+```
 
-3. Start the ADCM container:
-   ```shell
-   docker run -d --restart=always --network adcm-net -p 8000:8000 \
-     -v /opt/adcm:/adcm/data \
-     -e DB_HOST=adcm-pg -e DB_USER=adcm -e DB_PASS=adcmpassword -e DB_NAME=adcm \
-     --name adcm hub.arenadata.io/adcm/adcm:latest
-   ```
+ADCM will be available at `http://localhost:8000` once the containers are ready.
 
-4. Open ADCM UI at `http://localhost:8000`.
+To stop and remove the containers:
 
-Use `-v /opt/adcm:/adcm/data:Z` for SELinux.
+```shell
+docker compose down
+```
+
+To also remove the data volumes:
+
+```shell
+docker compose down -v
+```
+
+### Using a custom ADCM image
+
+If you built a local image with `make build`, override the image in the compose file:
+
+```shell
+ADCM_IMAGE=hub.adsw.io/adcm/adcm:my_branch docker compose up -d
+```
+
+Or edit the `image` field in `docker-compose.yaml` directly.
 
 ### Using an existing PostgreSQL instance
+
+If you already have a running PostgreSQL server, you can start just the ADCM container:
 
 ```shell
 docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data \
@@ -122,13 +129,14 @@ docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data \
   -e DB_PASS="DATABASE_USER_PASSWORD" --name adcm hub.arenadata.io/adcm/adcm:latest
 ```
 
-`DB_PORT` is optional and defaults to `5432`.
+All database environment variables (`DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`) are mandatory. `DB_PORT` is optional and defaults to `5432`.
 
 ### Set log level
 
-Add `-e LOG_LEVEL` to the `docker run` command:
+Add `LOG_LEVEL` to the `environment` section in `docker-compose.yaml` or pass it via the command line:
+
 ```shell
-docker run ... -e LOG_LEVEL="INFO"
+LOG_LEVEL=INFO docker compose up -d
 ```
 
 Valid choices: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (defaults to `ERROR`).
