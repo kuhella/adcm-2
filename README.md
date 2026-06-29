@@ -84,25 +84,51 @@ After this you will see invocation of black and pylint on every commit.
 
 ## Running ADCM in Docker
 
-_PostgreSQL 13 or newer is required._
+_PostgreSQL 13 or newer is required. All database environment variables (`DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`) are mandatory._
 
-1. Start container:
+### Quick start with a PostgreSQL container
+
+1. Create a Docker network:
    ```shell
-   docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data \
-     -e DB_HOST="DATABASE_HOSTNAME_OR_IP_ADDRESS" -e DB_PORT="DATABASE_TCP_PORT" \
-     -e DB_USER="DATABASE_USERNAME" -e DB_NAME="DATABASE_NAME" \
-     -e DB_PASS="DATABASE_USER_PASSWORD" --name adcm hub.arenadata.io/adcm/adcm:latest
+   docker network create adcm-net
    ```
-   Use `-v /opt/adcm:/adcm/data:Z` for SELinux.
-   Target PostgreSQL DB must not have a DB with name `DATABASE_NAME`.
-   Note that `DB_PORT` is optional and defaults to `5432`.
 
-## Set log level
-1. add `-e` option to `docker run` command:
+2. Start a PostgreSQL container:
    ```shell
-   docker run ... -e LOG_LEVEL="INFO"
+   docker run -d --restart=always --network adcm-net --name adcm-pg \
+     -e POSTGRES_USER=adcm -e POSTGRES_PASSWORD=adcmpassword -e POSTGRES_DB=adcm \
+     -v /opt/adcm-pg:/var/lib/postgresql/data \
+     postgres:14
    ```
-   
-   valid choices are: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
 
-   defaults to `ERROR`
+3. Start the ADCM container:
+   ```shell
+   docker run -d --restart=always --network adcm-net -p 8000:8000 \
+     -v /opt/adcm:/adcm/data \
+     -e DB_HOST=adcm-pg -e DB_USER=adcm -e DB_PASS=adcmpassword -e DB_NAME=adcm \
+     --name adcm hub.arenadata.io/adcm/adcm:latest
+   ```
+
+4. Open ADCM UI at `http://localhost:8000`.
+
+Use `-v /opt/adcm:/adcm/data:Z` for SELinux.
+
+### Using an existing PostgreSQL instance
+
+```shell
+docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data \
+  -e DB_HOST="DATABASE_HOSTNAME_OR_IP_ADDRESS" -e DB_PORT="DATABASE_TCP_PORT" \
+  -e DB_USER="DATABASE_USERNAME" -e DB_NAME="DATABASE_NAME" \
+  -e DB_PASS="DATABASE_USER_PASSWORD" --name adcm hub.arenadata.io/adcm/adcm:latest
+```
+
+`DB_PORT` is optional and defaults to `5432`.
+
+### Set log level
+
+Add `-e LOG_LEVEL` to the `docker run` command:
+```shell
+docker run ... -e LOG_LEVEL="INFO"
+```
+
+Valid choices: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (defaults to `ERROR`).

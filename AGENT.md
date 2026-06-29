@@ -106,8 +106,24 @@ pre-commit install
 
 ### Running in Docker
 
-PostgreSQL 13 or newer is required.
+PostgreSQL 13 or newer is required. All database environment variables (`DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`) are mandatory.
 
+**Quick start with a PostgreSQL container:**
+```sh
+# Create network and start PostgreSQL
+docker network create adcm-net
+docker run -d --restart=always --network adcm-net --name adcm-pg \
+  -e POSTGRES_USER=adcm -e POSTGRES_PASSWORD=adcmpassword -e POSTGRES_DB=adcm \
+  postgres:14
+
+# Start ADCM
+docker run -d --restart=always --network adcm-net -p 8000:8000 \
+  -v /opt/adcm:/adcm/data \
+  -e DB_HOST=adcm-pg -e DB_USER=adcm -e DB_PASS=adcmpassword -e DB_NAME=adcm \
+  --name adcm hub.arenadata.io/adcm/adcm:latest
+```
+
+**Using an existing PostgreSQL instance:**
 ```sh
 docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data \
   -e DB_HOST="hostname" -e DB_PORT="5432" \
