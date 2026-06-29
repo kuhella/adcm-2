@@ -81,14 +81,14 @@ class ObjectField(JSONField):
     def to_representation(self, value):
         data = []
         for obj in value.all():
-            data.append(
-                {
-                    "id": obj.object_id,
-                    "type": obj.object.prototype.type,
-                    "name": obj.object.display_name,
-                    "uuid": str(obj.object.uuid),
-                },
-            )
+            entry = {
+                "id": obj.object_id,
+                "type": obj.object.prototype.type,
+                "name": obj.object.display_name,
+            }
+            if not isinstance(obj.object, Provider):
+                entry["uuid"] = str(obj.object.uuid)
+            data.append(entry)
 
         return super().to_representation(data)
 
@@ -98,16 +98,16 @@ class PolicyObjectField(ObjectField):
         data = []
         for obj in value.all():
             parent_id = obj.object.cluster_id if isinstance(obj.object, Service) else None
-            data.append(
-                {
-                    "id": obj.object_id,
-                    "type": obj.object.prototype.type,
-                    "name": obj.object.name,
-                    "display_name": obj.object.display_name,
-                    "parent_id": parent_id,
-                    "uuid": str(obj.object.uuid),
-                },
-            )
+            entry = {
+                "id": obj.object_id,
+                "type": obj.object.prototype.type,
+                "name": obj.object.name,
+                "display_name": obj.object.display_name,
+                "parent_id": parent_id,
+            }
+            if not isinstance(obj.object, Provider):
+                entry["uuid"] = str(obj.object.uuid)
+            data.append(entry)
 
         return super(ObjectField, self).to_representation(data)
 
@@ -133,7 +133,7 @@ class PolicySerializer(ModelSerializer):
 
 class SchemaPolicyObjectsField(EmptySerializer):
     id = IntegerField(min_value=1)
-    uuid = CharField(allow_null=False, allow_blank=False)
+    uuid = CharField(allow_null=False, allow_blank=False, required=False)
     parent_id = IntegerField(min_value=1, required=False, allow_null=True)
     type = CharField(allow_null=False, allow_blank=False)
     name = CharField(allow_null=False, allow_blank=False)

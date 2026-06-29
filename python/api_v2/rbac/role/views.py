@@ -242,7 +242,6 @@ class RoleViewSet(
                     {
                         "name": provider.display_name,
                         "id": provider.id,
-                        "uuid": str(provider.uuid),
                     },
                 )
 
