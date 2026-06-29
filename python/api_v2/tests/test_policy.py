@@ -116,6 +116,7 @@ class TestPolicy(ADCMDjangoAPISuite):
                     "name": self.provider.name,
                     "displayName": self.provider.display_name,
                     "parentId": None,
+                    "uuid": str(self.provider.uuid),
                 }
             ],
         )
@@ -218,6 +219,7 @@ class TestPolicy(ADCMDjangoAPISuite):
                 "name": service_2.name,
                 "parentId": service_2.cluster_id,
                 "type": "service",
+                "uuid": str(service_2.uuid),
             },
         ]
         expected_objects_three_services = [
@@ -228,6 +230,7 @@ class TestPolicy(ADCMDjangoAPISuite):
                 "name": service_3.name,
                 "parentId": service_3.cluster_id,
                 "type": "service",
+                "uuid": str(service_3.uuid),
             },
             {
                 "id": service_6.id,
@@ -235,6 +238,7 @@ class TestPolicy(ADCMDjangoAPISuite):
                 "name": service_6.name,
                 "parentId": service_6.cluster_id,
                 "type": "service",
+                "uuid": str(service_6.uuid),
             },
         ]
         expected_objects_cluster = [
@@ -244,6 +248,7 @@ class TestPolicy(ADCMDjangoAPISuite):
                 "name": self.cluster_1.name,
                 "parentId": None,
                 "type": "cluster",
+                "uuid": str(self.cluster_1.uuid),
             }
         ]
         expected_queries_number = 7

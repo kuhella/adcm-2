@@ -199,6 +199,10 @@ components:
         id:
           type: integer
           readOnly: true
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
         name:
           $ref: '#/components/schemas/NameEnum'
         state:
@@ -221,6 +225,7 @@ components:
           readOnly: true
       required:
       - id
+      - uuid
       - name
       - state
       - multiState
@@ -552,6 +557,10 @@ components:
         id:
           type: integer
           readOnly: true
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
         name:
           type: string
           maxLength: 1000
@@ -586,6 +595,7 @@ components:
           readOnly: true
       required:
       - id
+      - uuid
       - name
       - description
       - state
@@ -624,10 +634,13 @@ components:
       properties:
         id:
           type: integer
+        uuid:
+          type: string
         name:
           type: string
       required:
       - id
+      - uuid
       - name
     ClusterRelated:
       type: object
@@ -683,6 +696,10 @@ components:
         id:
           type: integer
           readOnly: true
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
         name:
           type: string
           readOnly: true
@@ -737,6 +754,7 @@ components:
           readOnly: true
       required:
       - id
+      - uuid
       - name
       - displayName
       - status
@@ -1109,6 +1127,10 @@ components:
         id:
           type: integer
           readOnly: true
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
         name:
           type: string
           description: fully qualified domain name
@@ -1152,6 +1174,7 @@ components:
           readOnly: true
       required:
       - id
+      - uuid
       - name
       - description
       - state
@@ -1298,10 +1321,13 @@ components:
       properties:
         id:
           type: integer
+        uuid:
+          type: string
         name:
           type: string
       required:
       - id
+      - uuid
       - name
     HostShort:
       type: object
@@ -2518,6 +2544,10 @@ components:
         id:
           type: integer
           readOnly: true
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
         name:
           type: string
           maxLength: 1000
@@ -2550,6 +2580,7 @@ components:
           readOnly: true
       required:
       - id
+      - uuid
       - name
       - state
       - multiState
@@ -2575,10 +2606,13 @@ components:
       properties:
         id:
           type: integer
+        uuid:
+          type: string
         name:
           type: string
       required:
       - id
+      - uuid
       - name
     ProviderParent:
       type: object
@@ -2601,6 +2635,10 @@ components:
       properties:
         id:
           type: integer
+          readOnly: true
+        uuid:
+          type: string
+          format: uuid
           readOnly: true
         name:
           type: string
@@ -2634,6 +2672,7 @@ components:
           readOnly: true
       required:
       - id
+      - uuid
       - name
       - state
       - multiState
@@ -3014,6 +3053,8 @@ components:
         id:
           type: integer
           minimum: 1
+        uuid:
+          type: string
         parentId:
           type: integer
           minimum: 1
@@ -3026,6 +3067,7 @@ components:
           type: string
       required:
       - id
+      - uuid
       - parentId
       - type
       - name
@@ -3075,6 +3117,8 @@ components:
           type: string
         displayName:
           type: string
+        uuid:
+          type: string
         clusters:
           type: array
           items:
@@ -3082,6 +3126,7 @@ components:
       required:
       - name
       - displayName
+      - uuid
       - clusters
     ServicePrototype:
       type: object
@@ -3200,6 +3245,10 @@ components:
         id:
           type: integer
           readOnly: true
+        uuid:
+          type: string
+          format: uuid
+          readOnly: true
         name:
           type: string
           readOnly: true
@@ -3248,6 +3297,7 @@ components:
           readOnly: true
       required:
       - id
+      - uuid
       - name
       - description
       - displayName
