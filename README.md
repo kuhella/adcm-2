@@ -82,68 +82,20 @@ pre-commit install
 
 After this you will see invocation of black and pylint on every commit.
 
-## Running ADCM using SQLite
+## Running ADCM in Docker
 
-1. Start container:
-
-    ```shell
-    docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data --name adcm hub.arenadata.io/adcm/adcm:latest
-    ```
-
-    Use `-v /opt/adcm:/adcm/data:Z` for SELinux
-
-## Running ADCM using client PostgreSQL DB
-_PostgreSQL must be version 13 or newer - JSONB field used_
+_PostgreSQL 13 or newer is required._
 
 1. Start container:
    ```shell
-   docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data 
-   -e DB_HOST="DATABASE_HOSTNAME_OR_IP_ADDRESS" -e DB_PORT="DATABASE_TCP_PORT" 
-   -e DB_USER="DATABASE_USERNAME" -e DB_NAME="DATABASE_NAME" 
-   -e DB_PASS="DATABASE_USER_PASSWORD" --name adcm hub.arenadata.io/adcm/adcm:latest
+   docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data \
+     -e DB_HOST="DATABASE_HOSTNAME_OR_IP_ADDRESS" -e DB_PORT="DATABASE_TCP_PORT" \
+     -e DB_USER="DATABASE_USERNAME" -e DB_NAME="DATABASE_NAME" \
+     -e DB_PASS="DATABASE_USER_PASSWORD" --name adcm hub.arenadata.io/adcm/adcm:latest
    ```
-   Use `-v /opt/adcm:/adcm/data:Z` for SELinux
-   Target PostgreSQL DB must not have DB with name `DATABASE_NAME`
-   Note that DB_PORT is optional and has default value 5432
-
-## Migrate SQLite -> client PostgreSQL
->__NOTE__: `adcm` is the ADCM's container name. 
-1. Dump SQLite DB to file:
-   ```shell
-   docker exec -it adcm /adcm/python/manage.py dumpdata --natural-foreign --natural-primary -o /adcm/data/var/data.json
-   ```
-2. Stop container:
-   ```shell
-   docker stop adcm
-   docker rm adcm
-   ```
-3. Start container in `MIGRATION_MODE`:
-   ```shell
-   docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data 
-   -e DB_HOST="DATABASE_HOSTNAME_OR_IP_ADDRESS" -e DB_PORT="DATABASE_TCP_PORT" 
-   -e DB_USER="DATABASE_USERNAME" -e DB_NAME="DATABASE_NAME" 
-   -e DB_PASS="DATABASE_USER_PASSWORD" -e MIGRATION_MODE=1
-   --name adcm hub.arenadata.io/adcm/adcm:latest
-   ```
-   Use `-v /opt/adcm:/adcm/data:Z` for SELinux
-   Target PostgreSQL DB must not have DB with name `DATABASE_NAME`
-4. Load dumped SQLite DB data to PostgreSQL
-   ```shell
-   docker exec -it adcm /adcm/python/manage.py loaddata /adcm/data/var/data.json
-   ```
-5. Stop container:
-   ```shell
-   docker stop adcm
-   docker rm adcm
-   ```
-6. Start container:
-   ```shell
-   docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data 
-   -e DB_HOST="DATABASE_HOSTNAME_OR_IP_ADDRESS" -e DB_PORT="DATABASE_TCP_PORT" 
-   -e DB_USER="DATABASE_USERNAME" -e DB_NAME="DATABASE_NAME" 
-   -e DB_PASS="DATABASE_USER_PASSWORD" -e MIGRATION_MODE=0
-   --name adcm hub.arenadata.io/adcm/adcm:latest
-   ```
+   Use `-v /opt/adcm:/adcm/data:Z` for SELinux.
+   Target PostgreSQL DB must not have a DB with name `DATABASE_NAME`.
+   Note that `DB_PORT` is optional and defaults to `5432`.
 
 ## Set log level
 1. add `-e` option to `docker run` command:

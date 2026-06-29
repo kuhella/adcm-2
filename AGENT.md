@@ -8,7 +8,7 @@ ADCM (Arenadata Cluster Manager), internally codenamed "Chapelnik", is a Django-
 - **Backend:** Python 3.10, Django 5.2, Django REST Framework 3.14
 - **Frontend:** Node.js 20 (Alpine-based build)
 - **Status Server:** Go 1.23
-- **Database:** SQLite (default) or PostgreSQL 13+
+- **Database:** PostgreSQL 13+
 - **Task Queue:** Celery (optional, with Kombu/SQLAlchemy for DB transport)
 - **Automation:** Ansible Core 2.16.4 + custom Ansible plugins/collections
 - **DI Container:** Dishka
@@ -106,18 +106,16 @@ pre-commit install
 
 ### Running in Docker
 
-**With SQLite (default):**
-```sh
-docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data --name adcm hub.arenadata.io/adcm/adcm:latest
-```
+PostgreSQL 13 or newer is required.
 
-**With external PostgreSQL:**
 ```sh
 docker run -d --restart=always -p 8000:8000 -v /opt/adcm:/adcm/data \
   -e DB_HOST="hostname" -e DB_PORT="5432" \
   -e DB_USER="username" -e DB_NAME="dbname" -e DB_PASS="password" \
   --name adcm hub.arenadata.io/adcm/adcm:latest
 ```
+
+`DB_PORT` is optional and defaults to `5432`.
 
 **Set log level:** Add `-e LOG_LEVEL="DEBUG|INFO|WARNING|ERROR|CRITICAL"` (defaults to `ERROR`).
 
