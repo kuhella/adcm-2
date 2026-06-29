@@ -498,6 +498,7 @@ class Provider(ADCMEntity):
         "ConfigHostGroup", object_id_field="object_id", content_type_field="object_type"
     )
     before_upgrade = models.JSONField(default=partial(dict, (("state", None),)))
+    uuid = models.UUIDField(default=uuid4, editable=False)
 
     __error_code__ = "PROVIDER_NOT_FOUND"
 

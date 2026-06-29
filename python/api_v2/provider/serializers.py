@@ -38,6 +38,7 @@ class ProviderSerializer(ModelSerializer):
         model = Provider
         fields = [
             "id",
+            "uuid",
             "name",
             "state",
             "multi_state",
