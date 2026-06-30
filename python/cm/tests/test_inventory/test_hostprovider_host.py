@@ -52,6 +52,7 @@ class TestInventoryProviderHost(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -80,6 +81,7 @@ class TestInventoryProviderHost(BaseInventoryTestCase):
                 {
                     "id": self.host_1.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.host_1.provider.uuid,
                 },
             ),
         }
@@ -111,6 +113,7 @@ class TestInventoryProviderHost(BaseInventoryTestCase):
                     "uuid": self.host_1.uuid,
                     "provider_config_integer": 101,
                     "provider_id": self.provider.pk,
+                    "provider_uuid": self.provider.uuid,
                 },
             ),
             ("hosts", f"{self.host_2.fqdn}"): (
@@ -125,6 +128,7 @@ class TestInventoryProviderHost(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -156,6 +160,7 @@ class TestInventoryProviderHost(BaseInventoryTestCase):
                     "uuid": self.host_1.uuid,
                     "provider_id": self.provider.pk,
                     "provider_config_integer": 101,
+                    "provider_uuid": self.provider.uuid,
                 },
             ),
             ("vars", "provider"): (
@@ -163,6 +168,7 @@ class TestInventoryProviderHost(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -198,6 +204,7 @@ class TestInventoryProviderHost(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_2.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }

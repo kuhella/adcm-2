@@ -87,6 +87,7 @@ class TestInventoryComponents(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -189,6 +190,7 @@ class TestInventoryComponents(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -210,6 +212,7 @@ class TestInventoryComponents(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_2.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -303,6 +306,7 @@ class TestInventoryComponents(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -324,6 +328,7 @@ class TestInventoryComponents(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_2.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -433,6 +438,7 @@ class TestInventoryComponents(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -551,6 +557,7 @@ class TestInventoryComponents(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -572,6 +579,7 @@ class TestInventoryComponents(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_2.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }

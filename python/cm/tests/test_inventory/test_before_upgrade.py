@@ -109,6 +109,7 @@ class TestBeforeUpgrade(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -126,6 +127,7 @@ class TestBeforeUpgrade(BaseInventoryTestCase):
                 {
                     "id": self.host_1.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -142,6 +144,7 @@ class TestBeforeUpgrade(BaseInventoryTestCase):
                 {
                     "id": self.host_2.provider.pk,
                     "host_prototype_id": self.host_2.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }

@@ -93,6 +93,7 @@ class ProviderNode(_MultiStateConversionModel):
     name: str
     state: str
     multi_state: list[str]
+    uuid: UUID
 
     before_upgrade: _BeforeUpgradeInventoryNode
     config: dict

@@ -179,6 +179,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -200,6 +201,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -277,6 +279,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -298,6 +301,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -396,6 +400,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -417,6 +422,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -438,6 +444,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": host_2.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -543,6 +550,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -564,6 +572,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -585,6 +594,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -688,6 +698,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -709,6 +720,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": self.host_1.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
@@ -730,6 +742,7 @@ class TestMaintenanceMode(BaseInventoryTestCase):
                 {
                     "id": self.provider.pk,
                     "host_prototype_id": host_2.prototype.pk,
+                    "uuid": self.provider.uuid,
                 },
             ),
         }
