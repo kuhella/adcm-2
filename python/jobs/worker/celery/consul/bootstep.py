@@ -47,7 +47,7 @@ class ConsulListenerStep(bootsteps.StartStopStep):
     worker in the pool.
     """
 
-    requires = {"celery.worker.components:Timer"}
+    requires = {"celery.worker.components:Timer", "celery.worker.components:Consumer"}
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
