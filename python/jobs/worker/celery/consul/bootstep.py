@@ -19,7 +19,7 @@ back to the response KV path and finally removes the original command.
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
 
 from celery import bootsteps
 from celery.utils.collections import AttributeDict
@@ -31,6 +31,10 @@ from jobs.scheduler.logger import logger
 from jobs.worker.celery.consul import settings as consul_settings
 from jobs.worker.celery.consul.client import ConsulKVClient, get_consul_kv_client
 from jobs.worker.celery.consul.control import Command, response_key
+
+if TYPE_CHECKING:
+    from celery.concurrency.base import BasePool
+    from celery.worker import WorkController
 
 
 class ConsulListenerStep(bootsteps.StartStopStep):
@@ -60,7 +64,9 @@ class ConsulListenerStep(bootsteps.StartStopStep):
             return
 
         interval = consul_settings.CONSUL_KV_COMMAND_POLL_INTERVAL
-        consumer = ConsulCommandConsumer(app=work_controller.app, hostname=self.hostname)
+        consumer = ConsulCommandConsumer(
+            app=work_controller.app, hostname=self.hostname, work_controller=work_controller
+        )
 
         self._tref = work_controller.timer.call_repeatedly(
             secs=interval,
@@ -78,17 +84,33 @@ class ConsulListenerStep(bootsteps.StartStopStep):
             self._tref = None
 
 
+class _ConsumerProxy:
+    """
+    Minimal stand-in for ``state.consumer`` expected by Celery Panel handlers.
+
+    This project does not use the standard AMQP consumer (tasks are consumed
+    from PostgreSQL), so ``WorkController.consumer`` does not exist.  Panel
+    handlers like ``revoke(terminate=True)`` only need ``state.consumer.pool``
+    to signal running task processes — we satisfy that by proxying the
+    execution pool from the WorkController.
+    """
+
+    def __init__(self, work_controller: WorkController) -> None:
+        self.pool: BasePool = work_controller.pool
+        self.controller: WorkController = work_controller
+
+
 class ConsulCommandConsumer:
     """
     Stateful helper used by :class:`ConsulListenerStep` to execute one
     poll iteration.
     """
 
-    def __init__(self, *, app, hostname: str, client: ConsulKVClient | None = None) -> None:
+    def __init__(self, *, app, hostname: str, client: ConsulKVClient | None = None, work_controller=None) -> None:
         self._app = app
         self._hostname = hostname
         self._client = client or get_consul_kv_client()
-        self._panel_state = _build_panel_state(app=app, hostname=hostname)
+        self._panel_state = _build_panel_state(app=app, hostname=hostname, work_controller=work_controller)
 
     def poll_once(self) -> None:
         prefix = consul_settings.normalize_prefix(consul_settings.CONSUL_KV_COMMAND_PREFIX or "")
@@ -152,7 +174,7 @@ class ConsulCommandConsumer:
             logger.error(f"Failed to delete processed Consul control command {key!r}")
 
 
-def _build_panel_state(*, app, hostname: str):
+def _build_panel_state(*, app, hostname: str, work_controller: WorkController | None):
     """
     Construct a state object accepted by Celery ``Panel`` handlers.
 
@@ -160,10 +182,15 @@ def _build_panel_state(*, app, hostname: str):
     ``AttributeDict`` for the mailbox listener; we reuse the same shape so
     that shipped control commands (``ping``, ``stats``, ``active``, ...) work
     unchanged when dispatched via Consul.
+
+    Since this project does not use the standard AMQP consumer, we provide a
+    :class:`_ConsumerProxy` that exposes the execution pool so that handlers
+    like ``revoke(terminate=True)`` can terminate running task processes.
     """
+    consumer = _ConsumerProxy(work_controller) if work_controller is not None else None
     return AttributeDict(
         app=app,
         hostname=hostname,
-        consumer=None,
+        consumer=consumer,
         tset=pass1,
     )
