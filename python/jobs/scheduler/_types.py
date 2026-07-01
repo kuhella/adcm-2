@@ -18,7 +18,7 @@ from enum import Enum
 from typing import NamedTuple, TypeAlias, TypedDict
 
 from core.action import ExecutionStatus
-from core.types import ActionID, ConcernID, TaskID
+from core.types import ActionID, ConcernID, JobID, TaskID
 import zoneinfo
 
 ###########
@@ -91,6 +91,13 @@ class TaskShortInfo:
     status: ExecutionStatus
     lock_id: ConcernID | None
     action: ActionShortInfo
+
+
+@dataclass(slots=True, frozen=True)
+class JobShortInfo:
+    id: JobID
+    worker: WorkerInfo
+    status: ExecutionStatus
 
 
 class LiveCheckResult(NamedTuple):

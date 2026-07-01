@@ -105,6 +105,7 @@ class JobUpdateDTO(BaseModel):
     finish_date: datetime | None = None
     status: ExecutionStatus | None = None
     objects_related_configs: list | None = None
+    executor: dict | None = None
 
 
 class JobRepoI(Protocol):
@@ -166,13 +167,13 @@ class JobRepoI(Protocol):
     def fill_task_mapping_and_configuration(self, task_id: TaskID, payload: TaskUpdateMainFieldsDTO) -> None:
         ...
 
-    def change_task_status(self, id: TaskID, previous: ExecutionStatus, new: ExecutionStatus) -> HasChanged: # noqa: A002 
+    def change_task_status(self, id: TaskID, previous: ExecutionStatus, new: ExecutionStatus) -> HasChanged:  # noqa: A002
         """
         Change task's status from `previous` to `new`, return flag if change was performed
         """
         ...
 
-    def change_job_status(self, id: JobID, previous: ExecutionStatus, new: ExecutionStatus) -> HasChanged: # noqa: A002
+    def change_job_status(self, id: JobID, previous: ExecutionStatus, new: ExecutionStatus) -> HasChanged:  # noqa: A002
         """
         Change job's status from `previous` to `new`, return flag if change was performed
         """

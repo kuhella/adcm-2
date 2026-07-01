@@ -213,12 +213,15 @@ class JobSequenceRunner(TaskRunner):
 
         target.executor.execute()
 
+        pid = getattr(target.executor.process, "pid", NO_PROCESS_PID)
+
         self._repo.update_job(
             id=target.job.id,
             data=JobUpdateDTO(
-                pid=getattr(target.executor.process, "pid", NO_PROCESS_PID),
+                pid=pid,
                 status=ExecutionStatus.RUNNING,
                 start_date=self._environment.now(),
+                executor={"environment": "local", "worker_id": pid},
             ),
         )
 

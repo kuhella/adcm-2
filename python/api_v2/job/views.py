@@ -11,7 +11,6 @@
 # limitations under the License.
 
 
-from django.db.transaction import atomic
 from adcm.permissions import VIEW_JOBLOG_PERMISSION
 from adcm.serializers import EmptySerializer
 from audit.alt.api import audit_update
@@ -20,6 +19,7 @@ from cm.models import JobLog
 from core.errors import NotFoundError
 from dishka import FromDishka
 from django.contrib.contenttypes.models import ContentType
+from django.db.transaction import atomic
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from guardian.mixins import PermissionListMixin
 from rest_framework.decorators import action

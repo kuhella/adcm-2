@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from django.db.transaction import atomic
 from adcm.permissions import VIEW_TASKLOG_PERMISSION
 from adcm.serializers import EmptySerializer
 from audit.alt.api import audit_update
@@ -20,6 +19,7 @@ from core.errors import NotFoundError
 from dishka import FromDishka
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import OuterRef, QuerySet, Subquery
+from django.db.transaction import atomic
 from django.http import HttpResponse
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from guardian.mixins import PermissionListMixin

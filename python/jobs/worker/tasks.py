@@ -17,6 +17,7 @@ from celery import Task, chain, signature
 from celery.canvas import Signature
 from celery.signals import after_setup_logger
 from core.action import ExecutionStatus
+from core.action.job import JobRepoI, JobUpdateDTO
 from core.legacy.job.runners import RunnerEnvironment, TaskRunner
 from core.types import JobID, TaskID
 from use_cases.job.run import FinalizeTask, MarkTaskBroken, PlannedJobs, RunJob, SetTaskToRunning
@@ -83,13 +84,16 @@ def run_scheduled_task(
 @app.task(bind=True, name=RUN_JOB_TASK_NAME)
 @di_task
 def run_job(
+    self,
     *_,
     task_id: TaskID,
     job_id: JobID,
     run_job: dishka.FromDishka[RunJob],
     environment: dishka.FromDishka[RunnerEnvironment],
+    repo: dishka.FromDishka[JobRepoI],
     **__,
 ) -> None:
+    repo.update_job(id=job_id, data=JobUpdateDTO(executor={"environment": "celery", "worker_id": self.request.id}))
     result = run_job.do(task_id=task_id, job_id=job_id, environment=environment)
     if result not in (ExecutionStatus.SUCCESS, ExecutionStatus.ABORTED):
         raise JobFailedFlowError(task_id=task_id, job_id=job_id, final_status=result)
