@@ -12,11 +12,18 @@
 
 
 import adcm.init_django  # noqa: F401, isort:skip
-from jobs.worker.celery.consul.bootstep import ConsulListenerStep
+
+from kombu.transport import TRANSPORT_ALIASES
+
+from jobs.worker.celery.consul.discovery import ConsulWorkerDiscoveryStep
 from jobs.worker.celery.utils import CustomCelery, CustomWorkerStep
+
+# Register the pgnotify transport so that broker_url="pgnotify+postgresql://..."
+# is resolved to our custom transport implementation.
+TRANSPORT_ALIASES["pgnotify"] = "jobs.worker.celery.transport.transport:Transport"
 
 app = CustomCelery("job-runner")
 app.config_from_object("jobs.worker.celery.settings")
 app.autodiscover_tasks(packages=["jobs.worker"])
 app.steps["worker"].add(CustomWorkerStep)
-app.steps["worker"].add(ConsulListenerStep)
+app.steps["worker"].add(ConsulWorkerDiscoveryStep)

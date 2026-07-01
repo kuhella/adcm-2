@@ -38,11 +38,16 @@ db_url = f"postgresql+psycopg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME
 if _options := get_db_options():
     db_url = f"{db_url}?{_options}"
 
+# PostgreSQL connection string for psycopg (without SQLAlchemy dialect prefix)
+_pg_url = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+if _options:
+    _pg_url = f"{_pg_url}?{_options}"
+
 ########################
 # Celery Worker settings
 ########################
 
-broker_url = f"sqla+{db_url}"
+broker_url = f"pgnotify+{_pg_url}"
 result_backend = f"db+{db_url}"
 result_extended = True
 broker_connection_retry_on_startup = True
