@@ -60,7 +60,9 @@ class ConsulListenerStep(bootsteps.StartStopStep):
             return
 
         interval = consul_settings.CONSUL_KV_COMMAND_POLL_INTERVAL
-        consumer = ConsulCommandConsumer(app=work_controller.app, hostname=self.hostname)
+        consumer = ConsulCommandConsumer(
+            app=work_controller.app, hostname=self.hostname, work_controller=work_controller
+        )
 
         self._tref = work_controller.timer.call_repeatedly(
             secs=interval,
@@ -84,10 +86,11 @@ class ConsulCommandConsumer:
     poll iteration.
     """
 
-    def __init__(self, *, app, hostname: str, client: ConsulKVClient | None = None) -> None:
+    def __init__(self, *, app, hostname: str, client: ConsulKVClient | None = None, work_controller=None) -> None:
         self._app = app
         self._hostname = hostname
         self._client = client or get_consul_kv_client()
+        self._work_controller = work_controller
         self._panel_state = _build_panel_state(app=app, hostname=hostname)
 
     def poll_once(self) -> None:
@@ -131,6 +134,9 @@ class ConsulCommandConsumer:
         handler = worker_control.Panel.data.get(command.method)
         if handler is None:
             return {"error": f"No such control command: {command.method!r}"}
+
+        if self._work_controller is not None:
+            self._panel_state.consumer = self._work_controller.consumer
 
         try:
             return handler(self._panel_state, **command.arguments)
