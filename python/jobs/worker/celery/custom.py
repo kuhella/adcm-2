@@ -15,8 +15,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from typing import Iterable
 
-from celery import Celery, bootsteps
-from celery.app.control import Control
+from celery import Celery, Task, bootsteps
 from celery.worker import WorkController
 from core.legacy.job.runners import JobFilterPredicate, always_true
 from dishka.integrations.base import wrap_injection
@@ -25,48 +24,24 @@ import dishka
 from jobs.scheduler._types import UTC, CeleryTaskState
 from jobs.scheduler.logger import logger
 from jobs.worker.celery import repo
-from jobs.worker.celery.consul.client import ConsulKVClient
 from jobs.worker.celery.models import DBTables
 from jobs.worker.celery.settings import CelerySettings
-
-
-@dataclass(slots=True)
-class RepoPingInspector:
-    interval: timedelta
-
-    def ping(self) -> set[str]:
-        """
-        Returns set of alive (there are timestamps not further than `2 * heartbeat_interval` seconds) celery workers.
-        """
-        threshold = datetime.now(tz=UTC) - self.interval
-
-        return repo.retrieve_alive_workers(threshold=threshold)
 
 
 class ADCMCelery(Celery):
     def __init__(
         self,
         *args,
-        # it should be a class, idk why it works this way
-        control: type[Control] | None = None,
         adcm_di_providers: Iterable[dishka.Provider],
         adcm_settings: CelerySettings,
-        adcm_consul_client: ConsulKVClient | None,
         **kwargs,
     ):
-        super().__init__(*args, control=control, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # risky, but should be safe for now
         self.config_from_object(adcm_settings)
 
         self.di_container = dishka.make_container(*adcm_di_providers, context={JobFilterPredicate: always_true})
-        self.ping_inspector = RepoPingInspector(
-            timedelta(seconds=2 * self.conf.adcm_worker.job_worker_celery_heartbeat_interval)
-        )
-        self.consul_client = adcm_consul_client
-
-    def ping(self) -> set[str]:
-        return self.ping_inspector.ping()
 
 
 class CustomWorkerStep(bootsteps.StartStopStep):

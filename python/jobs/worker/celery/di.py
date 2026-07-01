@@ -10,20 +10,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterable, NewType
+from typing import Iterable
 
 from celery import Celery
-from celery.bootsteps import Step
 from dishka import Provider, Scope, provide
-from pydantic import ValidationError
+from sqlalchemy import URL
 
-from jobs.worker.celery.consul.bootstep import ConsulListenerStep
-from jobs.worker.celery.consul.client import ConsulKVClient
-from jobs.worker.celery.consul.control import ConsulControl
-from jobs.worker.celery.custom import ADCMCelery, CustomWorkerStep
-from jobs.worker.celery.settings import CelerySettings, EnvConsulSettings, EnvDBSettings, EnvWorkerSettings
-
-NoConsul = NewType("NoConsul", None)
+# CustomWorkerStep is imported for the (currently disabled) worker-step registration below.
+from jobs.worker.celery.custom import ADCMCelery, CustomWorkerStep  # noqa: F401
+from jobs.worker.celery.pg.transport import make_broker_url
+from jobs.worker.celery.settings import CelerySettings, EnvDBSettings, EnvWorkerSettings
 
 
 class CeleryProvider(Provider):
@@ -39,77 +35,39 @@ class CeleryProvider(Provider):
     def celery_settings(self) -> CelerySettings:
         # todo silent/customize errors?
         db = EnvDBSettings()  # pyright: ignore[reportCallIssue]
-        connection_str = (
-            f"postgresql+psycopg://{db.user}:{db.password.get_secret_value()}@{db.host}:{db.port}/{db.name}"
-        )
-        if db.options:
-            options_str = "&".join(f"{key}={value}" for key, value in db.options.items())
-            connection_str = f"{connection_str}?{options_str}"
+        # Build via URL.create so credentials/host/db and options are properly
+        # percent-encoded — a password containing @ : / ? # would otherwise
+        # break URL parsing and authentication.
+        connection_str = URL.create(
+            "postgresql+psycopg",
+            username=db.user,
+            password=db.password.get_secret_value(),
+            host=db.host,
+            port=int(db.port),
+            database=db.name,
+            query={key: str(value) for key, value in db.options.items()},
+        ).render_as_string(hide_password=False)
 
         worker = EnvWorkerSettings()  # pyright: ignore[reportCallIssue]
-        try:
-            consul = EnvConsulSettings()  # pyright: ignore[reportCallIssue]
-        except ValidationError:
-            consul = None
 
         return CelerySettings(
             db_url=connection_str,
-            broker_url=f"sqla+{connection_str}",
+            # PostgreSQL LISTEN/NOTIFY broker; control commands ride native
+            # Celery pidbox over its fanout (see jobs.worker.celery.pg).
+            broker_url=make_broker_url(connection_str),
             result_backend=f"db+{connection_str}",
             adcm_worker=worker,
-            adcm_consul=consul,
         )
 
     @provide
-    def consul_client(self, settings: CelerySettings) -> Iterable[ConsulKVClient | NoConsul]:
-        consul_settings = settings.adcm_consul
-
-        if consul_settings is None:
-            yield NoConsul(None)
-            return
-
-        verify: str | bool = True
-        if consul_settings.cacert_file:
-            verify = consul_settings.cacert_file
-
-        token = None
-        if consul_settings.acl_token is not None:
-            token = consul_settings.acl_token.get_secret_value()
-
-        client = ConsulKVClient(
-            base_url=str(consul_settings.url),
-            datacenter=consul_settings.datacenter,
-            token=token,
-            verify=verify,
-            timeout=consul_settings.http_timeout,
-            pool_size=consul_settings.http_pool_size,
-        )
-
-        yield client
-
-        client.close()
-
-    @provide
-    def celery(
-        self, providers: Iterable[Provider], celery_settings: CelerySettings, consul_client: ConsulKVClient | NoConsul
-    ) -> Celery:
-        control = None
-        worker_steps: list[type[Step]] = [CustomWorkerStep]
-
-        if consul_client:
-            worker_steps.append(ConsulListenerStep)
-            control = ConsulControl
-
+    def celery(self, providers: Iterable[Provider], celery_settings: CelerySettings) -> Celery:
         app = ADCMCelery(
-            control=control,
             adcm_di_providers=providers,
             adcm_settings=celery_settings,
-            adcm_consul_client=consul_client,
         )
 
         app.autodiscover_tasks(packages=["jobs.worker"])
-
-        for step in worker_steps:
-            app.steps["worker"].add(step)  # pyright: ignore[reportOptionalSubscript]
+        # worker-step registration currently disabled:
+        # app.steps["worker"].add(CustomWorkerStep)
 
         return app

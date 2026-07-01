@@ -199,6 +199,7 @@ exclude = [
     "python/api_v2/",
     "python/jobs/scheduler/",
     "python/jobs/worker/celery/consul/",
+    "python/jobs/worker/celery/pg/",
     # common
     "**/tests",
     # technical

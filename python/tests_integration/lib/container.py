@@ -10,12 +10,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from testcontainers.core.container import DockerContainer
 from testcontainers.postgres import PostgresContainer
 
 
-def db_env_from_container(postgres: PostgresContainer) -> dict[str, str]:
-    c = postgres.get_wrapped_container()
+def container_ip(container: DockerContainer) -> str:
+    """Return a container's docker-network IP address.
+
+    The top-level ``NetworkSettings.IPAddress`` is only populated for the
+    default ``bridge`` network; on setups where the container is attached to a
+    user-defined network (e.g. Docker Desktop on macOS) it is empty and the IP
+    lives under ``NetworkSettings.Networks.<name>.IPAddress``. Fall back to that.
+    """
+    c = container.get_wrapped_container()
     c.reload()
-    db_ip = c.attrs["NetworkSettings"]["IPAddress"]
-    port = "5432"
-    return {"DB_HOST": db_ip, "DB_PORT": port}
+    net = c.attrs["NetworkSettings"]
+
+    ip = net.get("IPAddress")
+    if ip:
+        return ip
+
+    for network in (net.get("Networks") or {}).values():
+        ip = network.get("IPAddress")
+        if ip:
+            return ip
+
+    raise RuntimeError(f"could not determine container IP address from NetworkSettings: {net}")
+
+
+def db_env_from_container(postgres: PostgresContainer) -> dict[str, str]:
+    return {"DB_HOST": container_ip(postgres), "DB_PORT": "5432"}
