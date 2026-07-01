@@ -166,7 +166,7 @@ class Channel(virtual.Channel):
                 (queue_id, dumps(payload)),
             )
             channel_name = QUEUE_CHANNEL_PREFIX + self._sanitize_channel(queue)
-            cur.execute(psycopg.sql.SQL("NOTIFY {}, %s").format(psycopg.sql.Identifier(channel_name)), ("new",))
+            cur.execute("SELECT pg_notify(%s, %s)", (channel_name, "new"))
         self.query_conn.commit()
 
     def _get(self, queue, timeout=None):  # noqa: ARG002
@@ -259,7 +259,7 @@ class Channel(virtual.Channel):
             )
         conn = self.listen_conn
         with conn.cursor() as cur:
-            cur.execute(psycopg.sql.SQL("NOTIFY {}, %s").format(psycopg.sql.Identifier(fan_channel)), (serialised,))
+            cur.execute("SELECT pg_notify(%s, %s)", (fan_channel, serialised))
 
     # ---- LISTEN / drain_events -----------------------------------------------
 
