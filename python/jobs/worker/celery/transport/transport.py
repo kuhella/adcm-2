@@ -294,11 +294,21 @@ class Channel(virtual.Channel):
         if fd < 0:
             return False
 
+        # First drain any notifications already buffered in psycopg's internal
+        # queue (e.g. received during a prior pg_notify() call on the same conn).
+        received = self._drain_pg_notifications(conn)
+        if received:
+            return True
+
+        # No buffered notifications — wait for new data on the socket.
         wait = timeout if timeout is not None else 0.0
         ready = select.select([fd], [], [], wait)
         if not ready[0]:
             return False
 
+        return self._drain_pg_notifications(conn)
+
+    def _drain_pg_notifications(self, conn: psycopg.Connection) -> bool:
         received = False
         for notify in conn.notifies(timeout=0, stop_after=100):
             received = True
@@ -357,3 +367,62 @@ class Transport(virtual.Transport):
 
     def driver_version(self):
         return psycopg.__version__
+
+    def drain_events(self, connection, timeout=None):  # noqa: ARG002
+        """Drain events from both direct queues and fanout LISTEN/NOTIFY channels.
+
+        The base virtual transport's drain_events only cycles through direct
+        queues via _get_and_deliver.  We override to also check for fanout
+        notifications delivered via PostgreSQL LISTEN/NOTIFY, which is how
+        Celery pidbox (control commands) are delivered.
+        """
+        from time import monotonic
+        import socket as _socket
+
+        time_start = monotonic()
+        deadline = time_start + timeout if timeout is not None else None
+
+        while True:
+            # Drain fanout notifications on every channel.
+            if self._drain_fanout_on_channels():
+                return
+
+            # Try to get a direct-queue message.
+            try:
+                self.cycle.get(self._deliver, timeout=0)
+            except Empty:
+                pass
+            else:
+                return
+
+            # Check deadline.
+            if deadline is not None and monotonic() >= deadline:
+                raise _socket.timeout()
+
+            # Wait on LISTEN/NOTIFY with a short timeout, then retry.
+            remaining = (deadline - monotonic()) if deadline is not None else 1.0
+            wait = min(remaining, 1.0)
+            if wait <= 0:
+                raise _socket.timeout()
+
+            for channel in self.channels:
+                if channel._poll_listen(timeout=wait):
+                    break
+
+    def _drain_fanout_on_channels(self) -> bool:
+        """Poll all channels for fanout notifications and deliver them.
+
+        Returns True if at least one fanout message was delivered.
+        """
+        delivered = False
+        for channel in self.channels:
+            if channel._poll_listen(timeout=0.0):
+                pass  # notifications moved to _fanout_buffer
+            if channel._fanout_buffer:
+                while channel._fanout_buffer:
+                    queue, message = channel._fanout_buffer.pop(0)
+                    cb = self._callbacks.get(queue)
+                    if cb:
+                        cb(message)
+                        delivered = True
+        return delivered

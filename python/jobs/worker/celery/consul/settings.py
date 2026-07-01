@@ -11,8 +11,7 @@
 # limitations under the License.
 
 """
-Configuration for the Consul KV storage backend used by Celery's custom
-control/inspect commands.
+Configuration for Consul integration (worker discovery).
 
 All values are resolved from environment variables with sensible defaults.
 """
@@ -39,42 +38,9 @@ def _getfloat(name: str, default: float) -> float:
         raise RuntimeError(f"Environment variable {name!r} must be a number, got {raw!r}") from err
 
 
-def _getint(name: str, default: int) -> int:
-    raw = os.environ.get(name)
-    if raw is None or raw == "":
-        return default
-    try:
-        return int(raw)
-    except ValueError as err:
-        raise RuntimeError(f"Environment variable {name!r} must be an integer, got {raw!r}") from err
-
-
-# Consul server connection. CONSUL_URL / CONSUL_DATACENTER / CONSUL_CACERT_FILE
+# Consul server connection.
 CONSUL_URL: str | None = _getenv("CONSUL_URL")
 CONSUL_DATACENTER: str | None = _getenv("CONSUL_DATACENTER")
 CONSUL_CACERT_FILE: str | None = _getenv("CONSUL_CACERT_FILE")
 CONSUL_ACL_TOKEN: str | None = _getenv("CONSUL_ACL_TOKEN")
 CONSUL_HTTP_TIMEOUT: float = _getfloat("CONSUL_HTTP_TIMEOUT", 5.0)
-# Maximum number of HTTP connections kept alive inside the shared session pool.
-CONSUL_HTTP_POOL_SIZE: int = _getint("CONSUL_HTTP_POOL_SIZE", 10)
-
-# KV paths.
-CONSUL_KV_COMMAND_PREFIX: str | None = _getenv("CONSUL_KV_COMMAND_PREFIX", "celery/command")
-CONSUL_KV_RESPONSE_PREFIX: str | None = _getenv("CONSUL_KV_RESPONSE_PREFIX", "celery/response")
-
-# Polling intervals (seconds).
-# - Command: worker polls `CONSUL_KV_COMMAND_PREFIX/*` to pick up new commands.
-# - Response: control/inspect client polls `CONSUL_KV_RESPONSE_PREFIX/<cmd_id>/*`
-#   to collect per-worker responses until the timeout is reached.
-CONSUL_KV_COMMAND_POLL_INTERVAL: float = _getfloat("CONSUL_KV_COMMAND_POLL_INTERVAL", 1.0)
-CONSUL_KV_RESPONSE_POLL_INTERVAL: float = _getfloat("CONSUL_KV_RESPONSE_POLL_INTERVAL", 0.5)
-
-
-def is_enabled() -> bool:
-    """Return True if all mandatory settings for Consul-based control are set."""
-    return bool(CONSUL_URL and CONSUL_KV_COMMAND_PREFIX and CONSUL_KV_RESPONSE_PREFIX)
-
-
-def normalize_prefix(prefix: str) -> str:
-    """Normalize a KV prefix: strip leading slash, ensure trailing slash."""
-    return prefix.lstrip("/").rstrip("/") + "/"

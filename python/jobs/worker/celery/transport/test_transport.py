@@ -326,6 +326,93 @@ class TestCeleryIntegration(unittest.TestCase):
             self.assertIsInstance(transport, Transport)
             self.assertTrue(transport.Channel.supports_fanout)
 
+    def test_celery_control_broadcast_via_fanout(self):
+        """Control commands use pidbox fanout through the pgnotify transport."""
+        from celery import Celery
+
+        app = Celery("test-pidbox", broker=BROKER_URL)
+
+        # The pidbox exchange is a fanout exchange named "{hostname}.pidbox"
+        # Verify we can publish a control command through the transport
+        pidbox_exchange = Exchange("celery.pidbox", type="fanout")
+        reply_queue = Queue(
+            "test_pidbox_reply",
+            exchange=pidbox_exchange,
+            routing_key="",
+            auto_delete=True,
+        )
+
+        received = []
+
+        with app.connection_for_write() as conn:
+            # Bind a consumer to the pidbox fanout exchange
+            def on_message(body, message):
+                received.append(body)
+                message.ack()
+
+            with Consumer(conn, queues=[reply_queue], callbacks=[on_message]):
+                # Publish a control command (like ping) to the fanout exchange
+                producer = Producer(conn)
+                producer.publish(
+                    {
+                        "method": "ping",
+                        "arguments": {},
+                        "destination": None,
+                    },
+                    exchange=pidbox_exchange,
+                    routing_key="",
+                    serializer="json",
+                    declare=[reply_queue],
+                )
+
+                # Drain — the fanout message should arrive instantly via NOTIFY
+                conn.drain_events(timeout=3.0)
+
+        self.assertEqual(len(received), 1)
+        self.assertEqual(received[0]["method"], "ping")
+
+    def test_fanout_broadcast_reaches_multiple_consumers(self):
+        """Fanout exchange delivers to all bound consumers (simulates multi-worker pidbox)."""
+        from celery import Celery
+
+        app = Celery("test-multi-pidbox", broker=BROKER_URL)
+
+        fan_exchange = Exchange("test_multi_fan", type="fanout")
+        q1 = Queue("test_fan_worker_1", exchange=fan_exchange, routing_key="")
+        q2 = Queue("test_fan_worker_2", exchange=fan_exchange, routing_key="")
+
+        received_1 = []
+        received_2 = []
+
+        with app.connection_for_write() as conn:
+
+            def cb1(body, message):
+                received_1.append(body)
+                message.ack()
+
+            def cb2(body, message):
+                received_2.append(body)
+                message.ack()
+
+            with Consumer(conn, queues=[q1], callbacks=[cb1]):
+                with Consumer(conn, queues=[q2], callbacks=[cb2]):
+                    producer = Producer(conn)
+                    producer.publish(
+                        {"command": "revoke", "task_id": "abc-123"},
+                        exchange=fan_exchange,
+                        routing_key="",
+                        serializer="json",
+                        declare=[q1, q2],
+                    )
+
+                    # Single NOTIFY delivers to all bound queues at once
+                    conn.drain_events(timeout=3.0)
+
+        self.assertEqual(len(received_1), 1)
+        self.assertEqual(received_1[0]["command"], "revoke")
+        self.assertEqual(len(received_2), 1)
+        self.assertEqual(received_2[0]["task_id"], "abc-123")
+
 
 if __name__ == "__main__":
     unittest.main()
