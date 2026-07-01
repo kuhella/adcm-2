@@ -12,11 +12,13 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Any, Callable
 import os
 import time
 import signal
 
+from celery import Celery
 from core.action import ExecutionStatus
 from core.action.job import JobRepoI
 from django.db.transaction import atomic
@@ -57,21 +59,32 @@ class Clock:
         self.next_tick_after = now + self.period
 
 
-TASK_KILLER_REGISTRY: dict[TaskRunnerEnvironment, Callable[[TaskShortInfo], Any]] = {
-    TaskRunnerEnvironment.LOCAL: lambda x: os.kill(int(x.worker["worker_id"]), signal.SIGTERM),
-}
+def send_adcm_task_revoke_command(task: TaskShortInfo, container: dishka.Container):
+    celery_app = container.get(Celery)
+    celery_app.control.revoke(task_id=task.worker["worker_id"], terminate=True)
 
-JOB_KILLER_REGISTRY: dict[TaskRunnerEnvironment, Callable[[JobShortInfo], Any]] = {
-    TaskRunnerEnvironment.LOCAL: lambda x: os.kill(int(x.worker["worker_id"]), signal.SIGTERM),
-}
+
+def send_adcm_job_revoke_command(job: JobShortInfo, container: dishka.Container):
+    celery_app = container.get(Celery)
+    celery_app.control.revoke(task_id=job.worker["worker_id"], terminate=True)
 
 
 def run_killer_in_loop(container: dishka.Container) -> None:
+    TASK_KILLER_REGISTRY: dict[TaskRunnerEnvironment, Callable[[TaskShortInfo], Any]] = {
+        TaskRunnerEnvironment.LOCAL: lambda x: os.kill(int(x.worker["worker_id"]), signal.SIGTERM),
+        TaskRunnerEnvironment.CELERY: partial(send_adcm_task_revoke_command, container=container),
+    }
+
+    JOB_KILLER_REGISTRY: dict[TaskRunnerEnvironment, Callable[[JobShortInfo], Any]] = {
+        TaskRunnerEnvironment.LOCAL: lambda x: os.kill(int(x.worker["worker_id"]), signal.SIGTERM),
+        TaskRunnerEnvironment.CELERY: partial(send_adcm_job_revoke_command, container=container),
+    }
+
     logger.info("Job killer started (pid: %s)", os.getpid())
 
-    repo: JobRepoI = container.get(JobRepoI)
-
     from jobs.scheduler import settings
+
+    repo: JobRepoI = container.get(JobRepoI)
 
     clock = Clock(period=timedelta(seconds=settings.JOB_TERMINATION_POLL_INTERVAL))
 
@@ -88,6 +101,7 @@ def run_killer_in_loop(container: dishka.Container) -> None:
 
                     job = retrieve_job(job_id=job_id)
                     JOB_KILLER_REGISTRY[job.worker["environment"]](job)
+                    # todo write logs on update result, since it killer probably is already working on termination
                     repo.change_job_status(id=job_id, previous=job.status, new=ExecutionStatus.TERMINATING)
 
             for task_id in tasks_to_terminate:
@@ -97,6 +111,7 @@ def run_killer_in_loop(container: dishka.Container) -> None:
 
                     task = retrieve_task(task_id=task_id)
                     TASK_KILLER_REGISTRY[task.worker["environment"]](task)
+                    # todo write logs on update result, since it killer probably is already working on termination
                     repo.change_task_status(id=task_id, previous=task.status, new=ExecutionStatus.TERMINATING)
 
         except Exception:  # noqa: BLE001

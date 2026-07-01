@@ -76,8 +76,10 @@ def run_scheduled_task(
     set_task_to_running: dishka.FromDishka[SetTaskToRunning],
     **_,
 ) -> None:
+    logging.warning("SCHEDULE TASK START")
     result = set_task_to_running.do(task_id, environment=environment)
     plan = prepare_execution_plan(task_id, result.jobs)
+    logging.warning("SCHEDULE TASK FIN")
     return self.replace(plan)
 
 
@@ -93,10 +95,15 @@ def run_job(
     repo: dishka.FromDishka[JobRepoI],
     **__,
 ) -> None:
+    logging.warning("RUN JOB START")
+    #    logging.warning("RUN JOB SLEEP")
+    #    sleep(30)
+    #    logging.warning("RUN JOB AWAKE")
     repo.update_job(id=job_id, data=JobUpdateDTO(executor={"environment": "celery", "worker_id": self.request.id}))
     result = run_job.do(task_id=task_id, job_id=job_id, environment=environment)
     if result not in (ExecutionStatus.SUCCESS, ExecutionStatus.ABORTED):
         raise JobFailedFlowError(task_id=task_id, job_id=job_id, final_status=result)
+    logging.warning("RUN JOB FIN")
 
 
 @app.task(bind=True, name=COMPLETE_TASK_TASK_NAME)
@@ -108,7 +115,9 @@ def complete_task(
     environment: dishka.FromDishka[RunnerEnvironment],
     **__,
 ) -> None:
+    logging.warning("COMPLETE TASK START")
     finalize_task.do(task_id=task_id, environment=environment)
+    logging.warning("COMPLETE TASK FIN")
 
 
 @app.task(bind=True, name=SET_TASK_TO_BROKEN_TASK_NAME)

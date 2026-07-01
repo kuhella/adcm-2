@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from typing import Iterable
 
-from celery import Celery, bootsteps
+from celery import Celery, Task, bootsteps
 from celery.app.control import Control
 from celery.worker import WorkController
 from core.legacy.job.runners import JobFilterPredicate, always_true
@@ -65,8 +65,23 @@ class ADCMCelery(Celery):
         )
         self.consul_client = adcm_consul_client
 
-    def ping(self) -> set[str]:
-        return self.ping_inspector.ping()
+
+#    def ping(self) -> set[str]:
+#        logging.error("WOW")
+#        return self.ping_inspector.ping()
+
+# CELERY FLOW
+#
+# ADCM PATCH WAY
+# :: Task Queue PG hack ;
+#
+#    PG liveness check (step-based alternative way) ;
+#    Consul based commands push/pull (step-based alternative way) ;
+#
+#    ?
+#    Consul broker:
+#     -> full protocol support => no need in hacks | + custom logic
+#     -> nothing
 
 
 class CustomWorkerStep(bootsteps.StartStopStep):
@@ -116,6 +131,10 @@ class CustomWorkerStep(bootsteps.StartStopStep):
         )
 
         logger.debug(f"DB heartbeat started at {self.hostname} worker.")
+
+
+class ADCMTask(Task):
+    ...
 
 
 # kept DI function in here, because they are deeply dependant on `ADCMCelery` structure

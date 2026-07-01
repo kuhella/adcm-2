@@ -20,6 +20,7 @@ back to the response KV path and finally removes the original command.
 from __future__ import annotations
 
 from typing import Any, Iterable
+import logging
 
 from celery import bootsteps
 from celery.utils.collections import AttributeDict
@@ -123,6 +124,8 @@ class ConsulCommandConsumer:
         return self._hostname in destination
 
     def _execute(self, command: Command) -> dict[str, Any]:
+        if command.method == "revoke":
+            logging.warning("revoke called on %s", command.arguments)
         handler = worker_control.Panel.data.get(command.method)
         if handler is None:
             return {"error": f"No such control command: {command.method!r}"}
@@ -130,7 +133,7 @@ class ConsulCommandConsumer:
         try:
             return handler(self._panel_state, **command.arguments)
         except Exception as exc:  # noqa: BLE001
-            logger.error(f"Consul control command {command.method!r} failed")
+            logger.exception(f"Consul control command {command.method!r} failed")
             return {"error": repr(exc)}
 
     def _publish_response(self, *, command_id: str, result: dict[str, Any]) -> None:

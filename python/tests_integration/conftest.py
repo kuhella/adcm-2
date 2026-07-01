@@ -152,7 +152,7 @@ def adcm_worker_container(adcm_image: str, adcm_worker_env: dict) -> DockerConta
 
 
 @pytest.fixture(scope="module")
-def adcm_worker(adcm_worker_container: DockerContainer) -> Generator[DockerContainer, None, None]:
+def adcm_worker(adcm_main, adcm_worker_container: DockerContainer) -> Generator[DockerContainer, None, None]:
     with adcm_worker_container as container:
         yield container
 

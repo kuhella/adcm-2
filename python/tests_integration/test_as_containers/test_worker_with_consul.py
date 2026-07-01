@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import datetime
 import json
 
 from testcontainers.core.generic import DockerContainer
@@ -31,18 +32,23 @@ class TestAction(Smoke):
     def test_terminate(self, various_actions_bundle: dict, client: YAAClient):
         bundle = various_actions_bundle
         action_name = "controlled_ansible"
-        run_payload = {"configuration": {"config": {"sleep": 0, "fail_step": None}, "adcmMeta": {}}}
+        run_payload = {"configuration": {"config": {"sleep": 10, "fail_step": None}, "adcmMeta": {}}}
 
         cluster_id = client.create_cluster(bundle)["id"]
 
         action = self.get_action_by_name(cluster_id, client=client, name=action_name)
-        task_id = self.run_cluster_action(cluster_id, action["id"], payload=run_payload, client=client)["id"]
+        task = self.run_cluster_action(cluster_id, action["id"], payload=run_payload, client=client)
 
-        client.expect_task_enters_status(task_id, status_is="running")
+        job_id = task["childJobs"][0]["id"]
 
-        client.do_request("POST", "tasks", task_id, "terminate")
+        client.expect_job_enters_status(job_id, status_is="running")
 
-        client.expect_task_enters_status(task_id, status_is="aborted")
+        client.do_request("POST", "jobs", job_id, "terminate")
+
+        rd = datetime.now()
+        v = rd.minute, rd.second
+
+        client.expect_task_enters_status(task["id"], status_is="success")
 
 
 def test_broadcast_ping(adcm_main: DockerContainer, adcm_worker: DockerContainer):

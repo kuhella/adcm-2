@@ -22,6 +22,7 @@ sys.path.append("/adcm/python")
 import adcm.init_django  # noqa
 from application.di.containers import get_main_providers
 from cm.transition.action import RetrieveStartImpossibleReason
+from jobs.worker.celery.di import CeleryProvider
 
 from jobs.scheduler.launcher import run_launcher_in_loop
 from jobs.scheduler.logger import logger
@@ -35,7 +36,7 @@ def main() -> None:
 
     actualize_locks()
 
-    container = make_container(*get_main_providers())
+    container = make_container(*get_main_providers(), CeleryProvider())
     retrieve_sir = container.get(RetrieveStartImpossibleReason)
 
     processes = [
