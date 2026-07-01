@@ -21,6 +21,7 @@ from jobs.worker.celery.consul.bootstep import ConsulListenerStep
 from jobs.worker.celery.consul.client import ConsulKVClient
 from jobs.worker.celery.consul.control import ConsulControl
 from jobs.worker.celery.custom import ADCMCelery, CustomWorkerStep
+from jobs.worker.celery.pg.transport import make_broker_url
 from jobs.worker.celery.settings import CelerySettings, EnvConsulSettings, EnvDBSettings, EnvWorkerSettings
 
 NoConsul = NewType("NoConsul", None)
@@ -52,9 +53,14 @@ class CeleryProvider(Provider):
         except ValidationError:
             consul = None
 
+        if worker.job_worker_celery_broker == "pg":
+            broker_url = make_broker_url(connection_str)
+        else:
+            broker_url = f"sqla+{connection_str}"
+
         return CelerySettings(
             db_url=connection_str,
-            broker_url=f"sqla+{connection_str}",
+            broker_url=broker_url,
             result_backend=f"db+{connection_str}",
             adcm_worker=worker,
             adcm_consul=consul,
@@ -96,7 +102,11 @@ class CeleryProvider(Provider):
         control = None
         worker_steps: list[type[Step]] = [CustomWorkerStep]
 
-        if consul_client:
+        # In "pg" mode control commands ride Celery's native pidbox over the
+        # transport's LISTEN/NOTIFY fanout, so the Consul control transport is
+        # intentionally left unregistered (kept in-tree for "sqla" mode).
+        pg_broker = celery_settings.adcm_worker.job_worker_celery_broker == "pg"
+        if consul_client and not pg_broker:
             worker_steps.append(ConsulListenerStep)
             control = ConsulControl
 

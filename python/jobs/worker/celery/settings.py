@@ -11,7 +11,7 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, Field, SecretStr
 from pydantic_core import Url
@@ -39,6 +39,12 @@ class EnvDBSettings(BaseSettings):
 class EnvWorkerSettings(BaseSettings):
     # seconds
     job_worker_celery_heartbeat_interval: Annotated[float, Field(default=5.0)]
+
+    # Messaging/control transport:
+    #   "pg" (default) — PostgreSQL LISTEN/NOTIFY broker with native Celery
+    #                    pidbox (no Consul); see jobs.worker.celery.pg
+    #   "sqla"         — sqla+ broker with Consul KV control commands
+    job_worker_celery_broker: Annotated[Literal["sqla", "pg"], Field(default="pg")]
 
 
 class EnvConsulSettings(BaseSettings):
