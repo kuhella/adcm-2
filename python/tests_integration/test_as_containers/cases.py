@@ -15,8 +15,6 @@ import json
 import pytest
 import psycopg
 
-from tests_integration.constants import INTEGRATION_BUNDLES
-from tests_integration.lib.bundles import BundlePacker
 from tests_integration.lib.client import YAAClient
 
 STAGES = json.dumps(
@@ -49,16 +47,6 @@ SCRIPTS_CONFIG_BASED = json.dumps(
 
 
 class Smoke:
-    @pytest.fixture(scope="module")
-    def various_actions_bundle(self, client: YAAClient, bundle_packer: BundlePacker) -> dict:
-        packed_bundle = bundle_packer.pack_from_dir(INTEGRATION_BUNDLES / "various_actions")
-        return client.upload_bundle(packed_bundle)
-
-    @pytest.fixture(scope="module")
-    def provider_bundle(self, client: YAAClient, bundle_packer: BundlePacker) -> dict:
-        packed_bundle = bundle_packer.pack_from_dir(INTEGRATION_BUNDLES / "provider")
-        return client.upload_bundle(packed_bundle)
-
     def get_action_by_name(self, cluster_id: int, client: YAAClient, name: str) -> dict:
         actions = client.do_request("GET", "clusters", cluster_id, "actions").json()
         action_id = next(action["id"] for action in actions if action["name"] == name)

@@ -21,7 +21,7 @@ import pytest
 import psycopg
 import requests
 
-from tests_integration.constants import ADCM_DATA_VOLUME, POSTGRESQL_MIN_IMAGE
+from tests_integration.constants import ADCM_DATA_VOLUME, INTEGRATION_BUNDLES, POSTGRESQL_MIN_IMAGE
 from tests_integration.lib.bundles import BundlePacker, SimpleBundlePacker
 from tests_integration.lib.celery import WORKER_ID_LOGS_REGEX, celery_command
 from tests_integration.lib.client import YAAClient
@@ -164,3 +164,18 @@ def client(faker: Faker, adcm_main: DockerContainer) -> Generator[YAAClient, Non
         client = YAAClient(session=session, api_root=api_root, faker=faker)
         client.login_as_admin()
         yield client
+
+
+# Bundles
+
+
+@pytest.fixture(scope="module")
+def various_actions_bundle(client: YAAClient, bundle_packer: BundlePacker) -> dict:
+    packed_bundle = bundle_packer.pack_from_dir(INTEGRATION_BUNDLES / "various_actions")
+    return client.upload_bundle(packed_bundle)
+
+
+@pytest.fixture(scope="module")
+def provider_bundle(client: YAAClient, bundle_packer: BundlePacker) -> dict:
+    packed_bundle = bundle_packer.pack_from_dir(INTEGRATION_BUNDLES / "provider")
+    return client.upload_bundle(packed_bundle)

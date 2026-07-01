@@ -25,6 +25,7 @@
 
   actions:
     controlled_ansible: &ca_task
+      allow_to_terminate: true
       masking: {}
       on_success:
         state: task-success

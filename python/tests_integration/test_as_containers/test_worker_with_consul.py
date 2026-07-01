@@ -16,7 +16,10 @@ from testcontainers.core.generic import DockerContainer
 import pytest
 
 from tests_integration.lib.celery import celery_command, extract_worker_id_from_container
+from tests_integration.lib.client import YAAClient
 from tests_integration.test_as_containers.cases import Smoke
+
+pytestmark = [pytest.mark.usefixtures("consul"), pytest.mark.usefixtures("adcm_worker")]
 
 
 @pytest.fixture(scope="module")
@@ -24,11 +27,24 @@ def adcm_main_env(database_env: dict, scheduler_celery_env: dict, consul_env: di
     return database_env | consul_env | scheduler_celery_env
 
 
-class TestSmoke(Smoke):
-    pytestmark = [pytest.mark.usefixtures("adcm_worker")]
+class TestAction(Smoke):
+    def test_terminate(self, various_actions_bundle: dict, client: YAAClient):
+        bundle = various_actions_bundle
+        action_name = "controlled_ansible"
+        run_payload = {"configuration": {"config": {"sleep": 0, "fail_step": None}, "adcmMeta": {}}}
+
+        cluster_id = client.create_cluster(bundle)["id"]
+
+        action = self.get_action_by_name(cluster_id, client=client, name=action_name)
+        task_id = self.run_cluster_action(cluster_id, action["id"], payload=run_payload, client=client)["id"]
+
+        client.expect_task_enters_status(task_id, status_is="running")
+
+        client.do_request("POST", "tasks", task_id, "terminate")
+
+        client.expect_task_enters_status(task_id, status_is="aborted")
 
 
-@pytest.mark.usefixtures("consul")
 def test_broadcast_ping(adcm_main: DockerContainer, adcm_worker: DockerContainer):
     worker_id = extract_worker_id_from_container(adcm_worker)
     result = adcm_main.exec(celery_command("inspect ping --json"))

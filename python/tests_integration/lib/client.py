@@ -136,35 +136,47 @@ class YAAClient:
     def expect_task_is_finished(
         self, task: dict, *, expected_status: str = "success", timeout: int = 15, period: float = 1.0
     ):
-        task_id = task["id"]
-        deadline = now() + timedelta(seconds=timeout)
-        task_status = "unknown"
-        final_statuses = {"success", "failed", "aborted", "broken", "revoked"}
+        self._expect_statuses(
+            ("tasks", task["id"]), expected_status, object_desc="Task", timeout=timeout, period=period
+        )
 
-        while now() < deadline:
-            task_status = self.do_request("GET", "tasks", task_id).json()["status"]
-            if task_status in final_statuses:
-                break
+    def expect_task_enters_status(
+        self, task_id: int, status_is: str | set[str], *, timeout: int = 5, period: float = 0.1
+    ):
+        self._expect_statuses(("tasks", task_id), status_is, object_desc="Task", timeout=timeout, period=period)
 
-            sleep(period)
+    def expect_job_enters_status(
+        self, job_id: int, status_is: str | set[str], *, timeout: int = 5, period: float = 0.1
+    ):
+        self._expect_statuses(("jobs", job_id), status_is, object_desc="Job", timeout=timeout, period=period)
 
-        assert task_status == expected_status, f"Unexpected final status of task: {task_status=}, {expected_status=}"
-
-    def expect_job_enters_status(self, job_id: int, status_is: str | set[str]):
-        timeout = 5
-        period = 0.1
-        deadline = now() + timedelta(seconds=timeout)
-
+    def _expect_statuses(
+        self,
+        ep_path: tuple[str | int, ...],
+        status_is: str | set[str],
+        object_desc: str,
+        *,
+        timeout: int,
+        period: float,
+    ) -> str | None:
         expected_statuses = {status_is} if isinstance(status_is, str) else status_is
+        final_statuses = {"success", "failed", "aborted", "broken", "revoked"}
+        stop_statuses = expected_statuses | final_statuses
+
+        deadline = now() + timedelta(seconds=timeout)
 
         actual_status = None
 
         while now() < deadline:
-            actual_status = self.do_request("GET", "jobs", job_id).json()["status"]
+            actual_status = self.do_request("GET", *ep_path).json()["status"]
 
-            if actual_status in expected_statuses:
+            if actual_status in stop_statuses:
                 break
 
             sleep(period)
 
-        assert actual_status in expected_statuses, f"Job status mismatch: {actual_status=} {expected_statuses=}"
+        assert (
+            actual_status in expected_statuses
+        ), f"{object_desc} status mismatch: {actual_status=} {expected_statuses=}"
+
+        return actual_status
