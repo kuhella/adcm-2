@@ -32,11 +32,12 @@ from kombu.transport import virtual
 from kombu.utils import cached_property
 from kombu.utils.encoding import bytes_to_str
 from sqlalchemy import create_engine, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from jobs.worker.celery.pg.listen import ListenConnection, sqlalchemy_url_to_dsn
-from jobs.worker.celery.pg.models import Message, Queue, metadata
+from jobs.worker.celery.pg.models import Binding, Message, Queue, metadata
 from jobs.worker.celery.pg.poller import FanoutPoller
 
 logger = logging.getLogger(__name__)
@@ -214,19 +215,50 @@ class Channel(virtual.Channel):
         self.session.commit()
         return count
 
+    def _delete(self, queue, *args, **kwargs) -> None:  # noqa: ARG002
+        # Drop the queue with its messages and persisted bindings. This is how
+        # ephemeral pidbox reply queues get cleaned up (auto_delete), so the
+        # binding table does not grow unbounded.
+        self.session.query(Binding).filter(Binding.queue == queue).delete(synchronize_session=False)
+        obj = self.session.query(Queue).filter(Queue.name == queue).first()
+        if obj is not None:
+            self.session.query(Message).filter(Message.queue_id == obj.id).delete(synchronize_session=False)
+            self.session.delete(obj)
+        self.session.commit()
+
     # -- fanout (control commands / pidbox) -------------------------------
 
     def _put_fanout(self, exchange, message, routing_key, **kwargs) -> None:  # noqa: ARG002
         """Broadcast a message to every worker LISTENing on the exchange."""
         self.listen_connection.notify(fanout_channel_name(exchange), dumps(message))
 
-    def _queue_bind(self, *args, **kwargs) -> None:
-        # `supports_fanout` requires this hook, but our fanout channel is
-        # derived purely from the exchange name (see `fanout_channel_name`), so
-        # there is no cross-process binding table to persist. The in-memory
-        # `BrokerState` table the base already populated is enough for local
-        # exchange->queue routing.
-        ...
+    def _queue_bind(self, exchange, routing_key, pattern, queue) -> None:
+        # Persist the binding so a publisher in ANOTHER process can route a
+        # direct/topic message to this queue (fanout still routes via NOTIFY
+        # channels; persisting uniformly is harmless). This is what makes
+        # cross-process pidbox replies work.
+        stmt = (
+            pg_insert(Binding)
+            .values(exchange=exchange, routing_key=routing_key or "", pattern=pattern or "", queue=queue or "")
+            .on_conflict_do_nothing(constraint="uq_kombu_binding")
+        )
+        self.session.execute(stmt)
+        self.session.commit()
+
+    def get_table(self, exchange):
+        # Merge the in-memory bindings (this process) with the persisted ones
+        # (all processes) so direct/topic lookups see queues bound elsewhere.
+        try:
+            in_memory = super().get_table(exchange)
+        except KeyError:
+            in_memory = []
+        rows = (
+            self.session.query(Binding.routing_key, Binding.pattern, Binding.queue)
+            .filter(Binding.exchange == exchange)
+            .all()
+        )
+        merged = {tuple(entry) for entry in in_memory} | {tuple(row) for row in rows}
+        return [list(entry) for entry in merged]
 
     # -- consume: LISTEN on fanout exchange or task-queue wakeup channel ---
 

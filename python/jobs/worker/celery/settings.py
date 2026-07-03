@@ -11,16 +11,10 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import Annotated, Literal
+from typing import Annotated
 
-from pydantic import AfterValidator, Field, SecretStr
-from pydantic_core import Url
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-def _normalize_kv_prefix(prefix: str) -> str:
-    """Normalize a KV prefix: strip leading slash, ensure trailing slash."""
-    return f"{prefix.strip('/')}/"
 
 
 class EnvDBSettings(BaseSettings):
@@ -40,32 +34,6 @@ class EnvWorkerSettings(BaseSettings):
     # seconds
     job_worker_celery_heartbeat_interval: Annotated[float, Field(default=5.0)]
 
-    # Messaging/control transport:
-    #   "pg" (default) — PostgreSQL LISTEN/NOTIFY broker with native Celery
-    #                    pidbox (no Consul); see jobs.worker.celery.pg
-    #   "sqla"         — sqla+ broker with Consul KV control commands
-    job_worker_celery_broker: Annotated[Literal["sqla", "pg"], Field(default="pg")]
-
-
-class EnvConsulSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="consul_")
-
-    # server connection
-    url: Url
-    datacenter: Annotated[str | None, Field(default=None)]
-    cacert_file: Annotated[str | None, Field(default=None)]
-    acl_token: Annotated[SecretStr | None, Field(default=None)]
-
-    # requests
-    http_timeout: Annotated[float, Field(default=5.0)]
-    http_pool_size: Annotated[int, Field(default=10)]
-
-    # client (kv)
-    kv_command_prefix: Annotated[str, Field(default="celery/command"), AfterValidator(_normalize_kv_prefix)]
-    kv_response_prefix: Annotated[str, Field(default="celery/response"), AfterValidator(_normalize_kv_prefix)]
-    kv_command_poll_interval: Annotated[float, Field(default=1.0)]
-    kv_response_poll_interval: Annotated[float, Field(default=0.5)]
-
 
 @dataclass(slots=True)
 class CelerySettings:
@@ -76,7 +44,6 @@ class CelerySettings:
 
     # ADCM specifics
     adcm_worker: EnvWorkerSettings
-    adcm_consul: EnvConsulSettings | None
 
     # Various
     result_extended: bool = True

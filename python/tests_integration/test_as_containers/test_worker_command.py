@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime
 import json
 
 from testcontainers.core.generic import DockerContainer
@@ -20,12 +19,12 @@ from tests_integration.lib.celery import celery_command, extract_worker_id_from_
 from tests_integration.lib.client import YAAClient
 from tests_integration.test_as_containers.cases import Smoke
 
-pytestmark = [pytest.mark.usefixtures("consul"), pytest.mark.usefixtures("adcm_worker")]
+pytestmark = [pytest.mark.usefixtures("adcm_worker")]
 
 
 @pytest.fixture(scope="module")
-def adcm_main_env(database_env: dict, scheduler_celery_env: dict, consul_env: dict) -> dict:
-    return database_env | consul_env | scheduler_celery_env
+def adcm_main_env(database_env: dict, scheduler_celery_env: dict) -> dict:
+    return database_env | scheduler_celery_env
 
 
 class TestAction(Smoke):
@@ -45,9 +44,6 @@ class TestAction(Smoke):
 
         client.do_request("POST", "jobs", job_id, "terminate")
 
-        rd = datetime.now()
-        v = rd.minute, rd.second
-
         client.expect_task_enters_status(task["id"], status_is="success")
 
 
@@ -56,4 +52,4 @@ def test_broadcast_ping(adcm_main: DockerContainer, adcm_worker: DockerContainer
     result = adcm_main.exec(celery_command("inspect ping --json"))
     assert result.exit_code == 0
     response = json.loads(result.output.decode())
-    assert response == [{worker_id: {"ok": "pong"}}]
+    assert response == {worker_id: {"ok": "pong"}}

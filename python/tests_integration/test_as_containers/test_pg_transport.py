@@ -21,8 +21,12 @@ drive it deterministically by invoking ``handle_notifications`` once the LISTEN
 socket has data, which is exactly what the event loop does.
 """
 
+from pathlib import Path
 from time import monotonic, sleep
 from typing import Callable
+import os
+import sys
+import subprocess
 
 from kombu import Connection, Consumer, Exchange, Producer, Queue
 from testcontainers.postgres import PostgresContainer
@@ -36,12 +40,15 @@ PIDBOX_EXCHANGE = Exchange("celery.pidbox", type="fanout")
 TRANSPORT_PATH = "jobs.worker.celery.pg.transport:Transport"
 
 
-def _broker_url(postgres: PostgresContainer) -> str:
+def _sqla_url(postgres: PostgresContainer) -> str:
     host = postgres.get_container_host_ip()
     port = postgres.get_exposed_port(5432)
     creds = f"{postgres.username}:{postgres.password}"
-    sqla_url = f"postgresql+psycopg://{creds}@{host}:{port}/{postgres.dbname}"
-    return f"{TRANSPORT_PATH}+{sqla_url}"
+    return f"postgresql+psycopg://{creds}@{host}:{port}/{postgres.dbname}"
+
+
+def _broker_url(postgres: PostgresContainer) -> str:
+    return f"{TRANSPORT_PATH}+{_sqla_url(postgres)}"
 
 
 def _wait_until(predicate: Callable[[], bool], *, timeout: float = 10.0, interval: float = 0.1) -> bool:
@@ -195,6 +202,57 @@ def _message_count(postgres: PostgresContainer, queue_name: str) -> int:
             (queue_name,),
         ).fetchone()
     return row[0] if row else 0
+
+
+# Importable Celery app the worker subprocess and this test process share.
+_PIDBOX_APP = "tests_integration.test_as_containers._pidbox_app"
+# repo `python/` dir: test_as_containers -> tests_integration -> python
+_PYTHON_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_pidbox_ping_round_trips_with_real_worker(postgres: PostgresContainer, tmp_path: Path) -> None:
+    """
+    A real Celery worker on the pg transport replies to a pidbox ping.
+
+    This is the cross-process regression test for shared exchange bindings: the
+    reply queue is declared by this process but the reply is published by the
+    worker process, so it only routes back if bindings are persisted (see
+    ``Channel._queue_bind`` / ``get_table``). A prefork worker is required — the
+    fanout/pidbox path is delivered via the async event loop, which the default
+    in-process (solo) test worker does not drive.
+    """
+    sqla = _sqla_url(postgres)
+    env = {**os.environ, "PYTHONPATH": str(_PYTHON_ROOT), "PIDBOX_TEST_SQLA_URL": sqla}
+    log = tmp_path / "worker.log"
+    replies: list = []
+
+    cmd = [
+        sys.executable, "-m", "celery", "-A", _PIDBOX_APP, "worker",
+        "-l", "info", "-c", "1", "-P", "prefork",
+        "-n", "pgpidbox@%h", "--without-gossip", "--without-mingle",
+    ]  # fmt: skip
+    with log.open("w") as logf:
+        worker = subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT, text=True)  # noqa: S603
+    try:
+        ready = _wait_until(lambda: log.exists() and "ready." in log.read_text(), timeout=90.0, interval=0.5)
+        assert ready, f"worker did not become ready. log:\n{log.read_text()}"
+
+        os.environ["PIDBOX_TEST_SQLA_URL"] = sqla
+        from tests_integration.test_as_containers import _pidbox_app
+
+        # limit=1 returns as soon as our single worker replies (no need to wait
+        # out the full timeout); a reply at all proves the round-trip.
+        replies = _pidbox_app.app.control.broadcast("ping", reply=True, limit=1, timeout=30)
+    finally:
+        worker.terminate()
+        try:
+            worker.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            worker.kill()
+
+    assert replies, f"no pidbox reply received over pg transport. worker log:\n{log.read_text()}"
+    _, payload = next(iter(replies[0].items()))
+    assert payload == {"ok": "pong"}
 
 
 if __name__ == "__main__":

@@ -23,7 +23,18 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, Sequence, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Sequence,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.schema import MetaData
 
@@ -65,4 +76,31 @@ class Message(ModelBase):
 
     def __init__(self, payload: str, queue: Queue) -> None:
         self.payload = payload
+        self.queue = queue
+
+
+class Binding(ModelBase):
+    """
+    Exchange->queue binding, shared across processes.
+
+    kombu's virtual transports keep bindings in per-process memory, so a
+    publisher in one process can't route a direct/topic message to a queue
+    declared in another (e.g. a pidbox reply queue). Persisting bindings here —
+    the way the redis transport persists them in redis — makes cross-process
+    routing work, which is what lets Celery pidbox replies round-trip.
+    """
+
+    __tablename__ = "kombu_binding"
+    __table_args__ = (UniqueConstraint("exchange", "routing_key", "queue", name="uq_kombu_binding"),)
+
+    id = Column(Integer, Sequence("kombu_binding_id_seq"), primary_key=True, autoincrement=True)
+    exchange = Column(String(200), nullable=False, index=True)
+    routing_key = Column(String(200), nullable=False, default="")
+    pattern = Column(String(400), nullable=False, default="")
+    queue = Column(String(200), nullable=False, index=True)
+
+    def __init__(self, exchange: str, routing_key: str, pattern: str, queue: str) -> None:
+        self.exchange = exchange
+        self.routing_key = routing_key
+        self.pattern = pattern
         self.queue = queue

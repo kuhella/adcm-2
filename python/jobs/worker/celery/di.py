@@ -10,21 +10,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterable, NewType
+from typing import Iterable
 
 from celery import Celery
-from celery.bootsteps import Step
 from dishka import Provider, Scope, provide
-from pydantic import ValidationError
 
-from jobs.worker.celery.consul.bootstep import ConsulListenerStep
-from jobs.worker.celery.consul.client import ConsulKVClient
-from jobs.worker.celery.consul.control import ConsulControl
-from jobs.worker.celery.custom import ADCMCelery, CustomWorkerStep
+# CustomWorkerStep is imported for the (currently disabled) worker-step registration below.
+from jobs.worker.celery.custom import ADCMCelery, CustomWorkerStep  # noqa: F401
 from jobs.worker.celery.pg.transport import make_broker_url
-from jobs.worker.celery.settings import CelerySettings, EnvConsulSettings, EnvDBSettings, EnvWorkerSettings
-
-NoConsul = NewType("NoConsul", None)
+from jobs.worker.celery.settings import CelerySettings, EnvDBSettings, EnvWorkerSettings
 
 
 class CeleryProvider(Provider):
@@ -48,78 +42,25 @@ class CeleryProvider(Provider):
             connection_str = f"{connection_str}?{options_str}"
 
         worker = EnvWorkerSettings()  # pyright: ignore[reportCallIssue]
-        try:
-            consul = EnvConsulSettings()  # pyright: ignore[reportCallIssue]
-        except ValidationError:
-            consul = None
-
-        if worker.job_worker_celery_broker == "pg":
-            broker_url = make_broker_url(connection_str)
-        else:
-            broker_url = f"sqla+{connection_str}"
 
         return CelerySettings(
             db_url=connection_str,
-            broker_url=broker_url,
+            # PostgreSQL LISTEN/NOTIFY broker; control commands ride native
+            # Celery pidbox over its fanout (see jobs.worker.celery.pg).
+            broker_url=make_broker_url(connection_str),
             result_backend=f"db+{connection_str}",
             adcm_worker=worker,
-            adcm_consul=consul,
         )
 
     @provide
-    def consul_client(self, settings: CelerySettings) -> Iterable[ConsulKVClient | NoConsul]:
-        consul_settings = settings.adcm_consul
-
-        if consul_settings is None:
-            yield NoConsul(None)
-            return
-
-        verify: str | bool = True
-        if consul_settings.cacert_file:
-            verify = consul_settings.cacert_file
-
-        token = None
-        if consul_settings.acl_token is not None:
-            token = consul_settings.acl_token.get_secret_value()
-
-        client = ConsulKVClient(
-            base_url=str(consul_settings.url),
-            datacenter=consul_settings.datacenter,
-            token=token,
-            verify=verify,
-            timeout=consul_settings.http_timeout,
-            pool_size=consul_settings.http_pool_size,
-        )
-
-        yield client
-
-        client.close()
-
-    @provide
-    def celery(
-        self, providers: Iterable[Provider], celery_settings: CelerySettings, consul_client: ConsulKVClient | NoConsul
-    ) -> Celery:
-        control = None
-        worker_steps: list[type[Step]] = [CustomWorkerStep]
-
-        # In "pg" mode control commands ride Celery's native pidbox over the
-        # transport's LISTEN/NOTIFY fanout, so the Consul control transport is
-        # intentionally left unregistered (kept in-tree for "sqla" mode).
-        pg_broker = celery_settings.adcm_worker.job_worker_celery_broker == "pg"
-        if consul_client and not pg_broker:
-            worker_steps.append(ConsulListenerStep)
-            control = ConsulControl
-
+    def celery(self, providers: Iterable[Provider], celery_settings: CelerySettings) -> Celery:
         app = ADCMCelery(
-            control=control,
             adcm_di_providers=providers,
             adcm_settings=celery_settings,
-            adcm_consul_client=consul_client,
         )
 
         app.autodiscover_tasks(packages=["jobs.worker"])
-
-        for step in worker_steps:
-            app.steps["worker"].add(step)  # pyright: ignore[reportOptionalSubscript]
+        # worker-step registration currently disabled:
+        # app.steps["worker"].add(CustomWorkerStep)
 
         return app
