@@ -155,6 +155,15 @@ class Channel(virtual.Channel):
             raise
 
     def _get(self, queue, timeout=None):  # noqa: ARG002
+        # AT-LEAST-ONCE / KNOWN GAP: claiming a message flips `visible=False` and
+        # records the row id in *process memory* (`_claimed_rows`); `basic_ack`
+        # deletes the row. There is no visibility timeout or redelivery: if the
+        # worker dies after claiming but before ack, the row stays `visible=False`
+        # forever — the message is neither redelivered nor cleaned up (leaked).
+        # ADCM recovers the *job* at a higher level (scheduler monitor reconciles
+        # against the result backend), but the kombu message and any chained
+        # continuation are not. A reaper for stale invisible rows (e.g. claim
+        # timestamp + sweep) would close this; not implemented yet.
         obj = self._get_or_create_queue(queue)
         try:
             msg = (
@@ -229,7 +238,19 @@ class Channel(virtual.Channel):
     # -- fanout (control commands / pidbox) -------------------------------
 
     def _put_fanout(self, exchange, message, routing_key, **kwargs) -> None:  # noqa: ARG002
-        """Broadcast a message to every worker LISTENing on the exchange."""
+        """Broadcast a message to every worker LISTENing on the exchange.
+
+        FIRE-AND-FORGET / KNOWN GAP: fanout rides ``NOTIFY``, which — unlike the
+        task queues — has no table backing. ``NOTIFY`` is not buffered for a
+        listener that is momentarily disconnected (e.g. reconnecting), so a
+        control command (``revoke``, ``ping``, ...) broadcast in that window is
+        silently lost, with no transport-level retry. Callers must not assume
+        exactly-once control delivery: the killer sends ``revoke`` once (then
+        flips the job to TERMINATING), so a missed revoke leaves the job running
+        while marked TERMINATING until higher-level reconciliation (scheduler
+        monitor vs. the result backend) catches it. Re-broadcasting while status
+        is TERMINATING, or gating the status flip on delivery, would close this.
+        """
         self.listen_connection.notify(fanout_channel_name(exchange), dumps(message))
 
     def _queue_bind(self, exchange, routing_key, pattern, queue) -> None:

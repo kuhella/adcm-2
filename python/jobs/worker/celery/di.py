@@ -14,6 +14,7 @@ from typing import Iterable
 
 from celery import Celery
 from dishka import Provider, Scope, provide
+from sqlalchemy import URL
 
 # CustomWorkerStep is imported for the (currently disabled) worker-step registration below.
 from jobs.worker.celery.custom import ADCMCelery, CustomWorkerStep  # noqa: F401
@@ -34,12 +35,18 @@ class CeleryProvider(Provider):
     def celery_settings(self) -> CelerySettings:
         # todo silent/customize errors?
         db = EnvDBSettings()  # pyright: ignore[reportCallIssue]
-        connection_str = (
-            f"postgresql+psycopg://{db.user}:{db.password.get_secret_value()}@{db.host}:{db.port}/{db.name}"
-        )
-        if db.options:
-            options_str = "&".join(f"{key}={value}" for key, value in db.options.items())
-            connection_str = f"{connection_str}?{options_str}"
+        # Build via URL.create so credentials/host/db and options are properly
+        # percent-encoded — a password containing @ : / ? # would otherwise
+        # break URL parsing and authentication.
+        connection_str = URL.create(
+            "postgresql+psycopg",
+            username=db.user,
+            password=db.password.get_secret_value(),
+            host=db.host,
+            port=int(db.port),
+            database=db.name,
+            query={key: str(value) for key, value in db.options.items()},
+        ).render_as_string(hide_password=False)
 
         worker = EnvWorkerSettings()  # pyright: ignore[reportCallIssue]
 
