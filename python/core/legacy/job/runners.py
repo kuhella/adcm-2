@@ -16,10 +16,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, NamedTuple, Protocol
 
+from core.action import ExecutionStatus, Job, Task
+from core.action.job import JobRepoI
 from core.cluster import ClusterService
 from core.legacy.job.executors import Executor
-from core.legacy.job.repo import ActionRepoInterface, JobRepoInterface
-from core.legacy.job.types import ExecutionStatus, Job, Task
 
 
 class ADCMSettings(NamedTuple):
@@ -121,8 +121,7 @@ class TaskRunner(ABC):
     _settings: ExternalSettings
 
     # external dependencies
-    _repo: JobRepoInterface
-    _action_repo: ActionRepoInterface
+    _repo: JobRepoI
     _environment: RunnerEnvironment
 
     _runtime: RunnerRuntime
@@ -132,14 +131,12 @@ class TaskRunner(ABC):
         *,
         job_processor: JobProcessor,
         settings: ExternalSettings,
-        repo: JobRepoInterface,
-        action_repo: ActionRepoInterface,
+        repo: JobRepoI,
         environment: RunnerEnvironment,
     ):
         self._job_processor = job_processor
         self._settings = settings
         self._repo = repo
-        self._action_repo = action_repo
         self._environment = environment
         self._runtime = RunnerRuntime(task_id=-1)
 

@@ -17,6 +17,7 @@ import re
 
 import yaml
 
+from core.action import JobSpec, ScriptType
 from core.legacy.bundle_alt.predicates import is_component_key
 from core.legacy.bundle_alt.representation import find_parent
 from core.legacy.bundle_alt.schema import (
@@ -42,7 +43,6 @@ from core.legacy.bundle_alt.types import (
     UpgradeRestrictions,
     VersionBound,
 )
-from core.legacy.job.types import JobSpec, ScriptType
 from core.templates import Template, parse_template
 
 # Public

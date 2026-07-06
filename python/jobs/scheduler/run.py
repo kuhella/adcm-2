@@ -27,6 +27,7 @@ from jobs.scheduler.launcher import run_launcher_in_loop
 from jobs.scheduler.logger import logger
 from jobs.scheduler.monitor import run_monitor_in_loop
 from jobs.scheduler.recover import actualize_locks
+from jobs.scheduler.killer import run_killer_in_loop
 
 
 def main() -> None:
@@ -37,16 +38,19 @@ def main() -> None:
     container = make_container(*get_main_providers())
     retrieve_sir = container.get(RetrieveStartImpossibleReason)
 
-    launcher_proc = Process(
-        target=run_launcher_in_loop,
-        args=(retrieve_sir,),
-    )
-    launcher_proc.start()
+    processes = [
+        Process(
+            target=run_launcher_in_loop,
+            args=(retrieve_sir,),
+        ),
+        Process(target=run_monitor_in_loop, args=()),
+        Process(target=run_killer_in_loop, args=(container,)),
+    ]
 
-    monitor_proc = Process(target=run_monitor_in_loop, args=())
-    monitor_proc.start()
+    for proc in processes:
+        proc.start()
 
-    for proc in (launcher_proc, monitor_proc):
+    for proc in processes:
         proc.join()
 
 

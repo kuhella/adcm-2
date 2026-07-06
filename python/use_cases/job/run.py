@@ -31,11 +31,10 @@ from cm.legacy.services.job.run.runners import (
     update_object_maintenance_mode,
 )
 from cm.transition.status import StatusScenarios
+from core.action import CallingProcess, ExecutionStatus, Job, Task, TaskOwner
+from core.action.job import JobRepoI, JobUpdateDTO, TaskUpdateDTO
 from core.cluster import ClusterService
-from core.legacy.job.dto import JobUpdateDTO, TaskUpdateDTO
-from core.legacy.job.repo import ActionRepoInterface, JobRepoInterface
 from core.legacy.job.runners import ExecutionTargetFactoryI, ExternalSettings, RunnerEnvironment
-from core.legacy.job.types import CallingProcess, ExecutionStatus, Job, Task, TaskOwner
 from core.types import ActionTargetDescriptor, ADCMCoreType, CoreObjectDescriptor, JobID, TaskID
 from django.db.transaction import atomic
 import core
@@ -57,7 +56,7 @@ class TaskDescription:
 
 @dataclass(slots=True)
 class SetTaskToRunning:
-    repo: JobRepoInterface
+    repo: JobRepoI
     notifier: EventNotifier
 
     def do(self, task_id: TaskID, environment: RunnerEnvironment) -> TaskDescription:
@@ -76,7 +75,7 @@ class SetTaskToRunning:
 
 @dataclass(slots=True)
 class RunJob:
-    repo: JobRepoInterface
+    repo: JobRepoI
     target_factory: ExecutionTargetFactoryI
     cluster_service: ClusterService
     external_settings: ExternalSettings
@@ -161,8 +160,7 @@ class RunJob:
 
 @dataclass(slots=True)
 class FinalizeTask:
-    job_repo: JobRepoInterface
-    action_repo: ActionRepoInterface
+    job_repo: JobRepoI
     notifier: EventNotifier
     status_scenarios: StatusScenarios
     cluster_service: ClusterService
@@ -290,7 +288,7 @@ class FinalizeTask:
         owner = CoreObjectDescriptor(id=task_owner.id, type=task_owner.type)
         target = ActionTargetDescriptor(id=task.target.id, type=task.target.type)
         process_context = ProcessContext(
-            action=self.action_repo.get_action(id=task.action.id),
+            action=self.job_repo.get_action(id=task.action.id),
             action_orm=Action.objects.get(id=task.action.id),
             owner=owner,
             owner_orm=core_type_to_model(owner.type).objects.get(id=owner.id),  # pyright: ignore[reportArgumentType]
@@ -309,7 +307,7 @@ class FinalizeTask:
 
 @dataclass(slots=True)
 class MarkTaskBroken:
-    repo: JobRepoInterface
+    repo: JobRepoI
 
     @atomic
     def do(self, task_id: TaskID, environment: RunnerEnvironment) -> None:

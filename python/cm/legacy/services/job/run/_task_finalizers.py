@@ -13,8 +13,8 @@
 from logging import Logger
 from typing import Protocol
 
+from core.action import Task
 from core.cluster import ClusterService
-from core.legacy.job.types import Task
 from core.types import ADCMCoreType, Descriptor
 from django.conf import settings
 

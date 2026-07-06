@@ -13,7 +13,7 @@
 from audit.alt.core import AuditSignature, Hooks, NameHalfSplitter, OperationAuditContext
 from audit.alt.object_retrievers import ignore_object_search
 from audit.models import AuditLogOperationResult, AuditLogOperationType, AuditObject, AuditObjectType
-from core.legacy.job.types import ExecutionStatus, Task
+from core.action import ExecutionStatus, Task
 from core.types import ADCMCoreType
 
 
