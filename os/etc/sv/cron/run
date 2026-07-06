@@ -11,9 +11,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Non-root periodic task runner.
+# Replaces BusyBox crond, which requires root: it setuid()s to each crontab's
+# owner per job, so when the container runs as a non-root user it schedules and
+# fires nothing.
+
 . /etc/adcmenv
 
 waitforwsgi
 
-echo "Run cron ..."
-crond -f -l 2
+cd "${adcmroot}/python" || exit 1
+
+run() {
+    python manage.py "$@" >/dev/null 2>&1 || echo "$(date '+%Y-%m-%d %H:%M:%S') periodic task failed: manage.py $*" >&2
+}
+
+echo "Run periodic task scheduler ..."
+
+while true; do
+    # Sleep to the start of the next minute so each minute fires once.
+    sleep "$((60 - $(date +%S)))"
+
+    time_hm="$(date +%H:%M)"
+    dow="$(date +%u)"  # 1=Mon .. 7=Sun
+
+    # every minute
+    run run_ldap_sync
+
+    case "${time_hm}" in
+        "08:00") run logrotate --target all ;;
+        "10:00") run clearaudit ;;
+        "00:00") run collect_statistics --mode send ;;
+        "22:00") [ "${dow}" = "1" ] && run gather_host_facts ;;
+    esac
+done
