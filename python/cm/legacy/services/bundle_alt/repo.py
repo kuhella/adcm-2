@@ -18,6 +18,7 @@ import json
 import hashlib
 import functools
 
+from core.action import JobSpec
 from core.bundle._types import SignatureStatus
 from core.legacy.bundle_alt._config import STACK_COMPLEX_FIELD_TYPES
 from core.legacy.bundle_alt.errors import BundleProcessingError
@@ -32,7 +33,6 @@ from core.legacy.bundle_alt.types import (
     ImportDefinition,
     UpgradeDefinition,
 )
-from core.legacy.job.types import JobSpec
 from django.db import IntegrityError
 from pydantic import BaseModel
 
