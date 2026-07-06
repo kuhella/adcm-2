@@ -16,7 +16,6 @@ from functools import wraps
 from typing import Iterable
 
 from celery import Celery, Task, bootsteps
-from celery.app.control import Control
 from celery.worker import WorkController
 from core.legacy.job.runners import JobFilterPredicate, always_true
 from dishka.integrations.base import wrap_injection
@@ -25,7 +24,6 @@ import dishka
 from jobs.scheduler._types import UTC, CeleryTaskState
 from jobs.scheduler.logger import logger
 from jobs.worker.celery import repo
-from jobs.worker.celery.consul.client import ConsulKVClient
 from jobs.worker.celery.models import DBTables
 from jobs.worker.celery.settings import CelerySettings
 
@@ -47,41 +45,23 @@ class ADCMCelery(Celery):
     def __init__(
         self,
         *args,
-        # it should be a class, idk why it works this way
-        control: type[Control] | None = None,
         adcm_di_providers: Iterable[dishka.Provider],
         adcm_settings: CelerySettings,
-        adcm_consul_client: ConsulKVClient | None,
         **kwargs,
     ):
-        super().__init__(*args, control=control, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # risky, but should be safe for now
         self.config_from_object(adcm_settings)
 
         self.di_container = dishka.make_container(*adcm_di_providers, context={JobFilterPredicate: always_true})
-        self.ping_inspector = RepoPingInspector(
-            timedelta(seconds=2 * self.conf.adcm_worker.job_worker_celery_heartbeat_interval)
-        )
-        self.consul_client = adcm_consul_client
-
+#        self.ping_inspector = RepoPingInspector(
+#            timedelta(seconds=2 * self.conf.adcm_worker.job_worker_celery_heartbeat_interval)
+#        )
 
 #    def ping(self) -> set[str]:
 #        logging.error("WOW")
 #        return self.ping_inspector.ping()
-
-# CELERY FLOW
-#
-# ADCM PATCH WAY
-# :: Task Queue PG hack ;
-#
-#    PG liveness check (step-based alternative way) ;
-#    Consul based commands push/pull (step-based alternative way) ;
-#
-#    ?
-#    Consul broker:
-#     -> full protocol support => no need in hacks | + custom logic
-#     -> nothing
 
 
 class CustomWorkerStep(bootsteps.StartStopStep):

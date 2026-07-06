@@ -70,12 +70,12 @@ def send_adcm_job_revoke_command(job: JobShortInfo, container: dishka.Container)
 
 
 def run_killer_in_loop(container: dishka.Container) -> None:
-    TASK_KILLER_REGISTRY: dict[TaskRunnerEnvironment, Callable[[TaskShortInfo], Any]] = {
+    task_killer_registry: dict[TaskRunnerEnvironment, Callable[[TaskShortInfo], Any]] = {
         TaskRunnerEnvironment.LOCAL: lambda x: os.kill(int(x.worker["worker_id"]), signal.SIGTERM),
         TaskRunnerEnvironment.CELERY: partial(send_adcm_task_revoke_command, container=container),
     }
 
-    JOB_KILLER_REGISTRY: dict[TaskRunnerEnvironment, Callable[[JobShortInfo], Any]] = {
+    job_killer_registry: dict[TaskRunnerEnvironment, Callable[[JobShortInfo], Any]] = {
         TaskRunnerEnvironment.LOCAL: lambda x: os.kill(int(x.worker["worker_id"]), signal.SIGTERM),
         TaskRunnerEnvironment.CELERY: partial(send_adcm_job_revoke_command, container=container),
     }
@@ -95,24 +95,29 @@ def run_killer_in_loop(container: dishka.Container) -> None:
             jobs_to_terminate, tasks_to_terminate = get_planned_for_termination()
 
             for job_id in jobs_to_terminate:
-                with atomic(), lock_job_for_termination(job_id) as job_id:
-                    if not job_id:
-                        continue
-
-                    job = retrieve_job(job_id=job_id)
-                    JOB_KILLER_REGISTRY[job.worker["environment"]](job)
-                    # todo write logs on update result, since it killer probably is already working on termination
-                    repo.change_job_status(id=job_id, previous=job.status, new=ExecutionStatus.TERMINATING)
+                job = None
+                # Only DB work under the row lock; claim it and mark TERMINATING.
+                with atomic(), lock_job_for_termination(job_id) as locked_job_id:
+                    if locked_job_id:
+                        job = retrieve_job(job_id=locked_job_id)
+                        # todo write logs on update result, since killer is already working on termination
+                        repo.change_job_status(id=locked_job_id, previous=job.status, new=ExecutionStatus.TERMINATING)
+                # Sending the kill/revoke is I/O (broker publish or signal): do it
+                # after the transaction commits so the row lock is not held across it.
+                if job is not None:
+                    job_killer_registry[job.worker["environment"]](job)
 
             for task_id in tasks_to_terminate:
-                with atomic(), lock_task_for_termination(task_id) as task_id:
-                    if not task_id:
-                        continue
-
-                    task = retrieve_task(task_id=task_id)
-                    TASK_KILLER_REGISTRY[task.worker["environment"]](task)
-                    # todo write logs on update result, since it killer probably is already working on termination
-                    repo.change_task_status(id=task_id, previous=task.status, new=ExecutionStatus.TERMINATING)
+                task = None
+                with atomic(), lock_task_for_termination(task_id) as locked_task_id:
+                    if locked_task_id:
+                        task = retrieve_task(task_id=locked_task_id)
+                        # todo write logs on update result, since killer is already working on termination
+                        repo.change_task_status(
+                            id=locked_task_id, previous=task.status, new=ExecutionStatus.TERMINATING
+                        )
+                if task is not None:
+                    task_killer_registry[task.worker["environment"]](task)
 
         except Exception:  # noqa: BLE001
             logger.exception("Job killer iteration failed")
