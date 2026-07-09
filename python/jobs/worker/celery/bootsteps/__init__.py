@@ -10,15 +10,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from celery import Celery
-from core.legacy.job.runners import JobFilterPredicate, always_true
-import dishka
+"""Worker bootsteps: startup/shutdown hooks wired into the Celery worker blueprint."""
 
-import adcm.init_django  # noqa: F401, isort:skip
+from jobs.worker.celery.bootsteps.consul import ConsulRegistrationStep, build_worker_registration, ttl_pass_interval
+from jobs.worker.celery.bootsteps.status_service import StatusServiceUrlStep
+from jobs.worker.celery.bootsteps.tables import ResultBackendTablesStep
 
-from application.di.containers import get_main_providers
-
-from jobs.worker.celery.di import CeleryProvider
-
-container = dishka.make_container(CeleryProvider(), *get_main_providers(), context={JobFilterPredicate: always_true})
-app = container.get(Celery)
+__all__ = [
+    "ConsulRegistrationStep",
+    "ResultBackendTablesStep",
+    "StatusServiceUrlStep",
+    "build_worker_registration",
+    "ttl_pass_interval",
+]

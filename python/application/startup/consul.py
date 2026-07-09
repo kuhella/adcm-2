@@ -39,7 +39,9 @@ class ConsulConfigurationError(RuntimeError):
     """Raised when Consul-related configuration is inconsistent."""
 
 
-def build_service_registration(*, datacenter: str | None, adcm_url: str, adcm_uuid: str | None) -> ServiceRegistration:
+def build_service_registration(
+    *, client_settings: ClientSettings, adcm_url: str, adcm_uuid: str | None
+) -> ServiceRegistration:
     parts = urlsplit(adcm_url)
 
     if parts.scheme is None or parts.hostname is None or parts.port is None:
@@ -57,15 +59,15 @@ def build_service_registration(*, datacenter: str | None, adcm_url: str, adcm_uu
     return ServiceRegistration(
         service_id=f"adcm@{container_id}",
         name="adcm",
-        datacenter=datacenter,
+        datacenter=client_settings.datacenter,
         tags=tags,
         address=parts.hostname,
         port=parts.port,
         meta={"status_service_url": _join_url(base_url, status_service_base_path)},
         health_check_url=_join_url(base_url, "/api/health/live"),
-        check_interval=settings.CONSUL_HEALTH_CHECK_INTERVAL,
-        check_timeout=settings.CONSUL_HEALTH_CHECK_TIMEOUT,
-        deregister_critical_service_after=settings.CONSUL_DEREGISTER_CRITICAL_SERVICE_AFTER,
+        check_interval=client_settings.health_check_interval,
+        check_timeout=client_settings.health_check_timeout,
+        deregister_critical_service_after=client_settings.deregister_critical_service_after,
     )
 
 
@@ -90,7 +92,7 @@ def register_adcm_in_service_discovery_when_consul_configured(container: Contain
 
     try:
         registration = build_service_registration(
-            datacenter=client_settings.datacenter,
+            client_settings=client_settings,
             adcm_url=str(adcm_url),
             adcm_uuid=adcm_uuid,
         )

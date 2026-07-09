@@ -10,21 +10,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 from functools import wraps
-from typing import Iterable
 
-from celery import Celery, Task, bootsteps
-from celery.worker import WorkController
-from core.legacy.job.runners import JobFilterPredicate, always_true
+from celery import Celery
+from core.adcm import ADCMRepoI
 from dishka.integrations.base import wrap_injection
 import dishka
 
-from jobs.scheduler._types import UTC, CeleryTaskState
 from jobs.scheduler.logger import logger
-from jobs.worker.celery import repo
-from jobs.worker.celery.models import DBTables
 from jobs.worker.celery.settings import CelerySettings
 
 
@@ -32,68 +25,30 @@ class ADCMCelery(Celery):
     def __init__(
         self,
         *args,
-        adcm_di_providers: Iterable[dishka.Provider],
+        adcm_di_container: dishka.Container,
         adcm_settings: CelerySettings,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
 
-        # risky, but should be safe for now
+        # CelerySettings is the config carrier: every field becomes an ``app.conf``
+        # key, both native Celery settings (broker_url, ...) and ADCM ones read by
+        # the worker bootsteps (bootsteps, default_adcm_url, ...).
         self.config_from_object(adcm_settings)
 
-        self.di_container = dishka.make_container(*adcm_di_providers, context={JobFilterPredicate: always_true})
-
-
-class CustomWorkerStep(bootsteps.StartStopStep):
-    """
-    Modifies worker on start behaviour:
-      - creates db tables if not exists
-      - sets final status for stale tasks
-      - starts custom db-driven heartbeat
-    """
-
-    requires = {"celery.worker.components:Timer"}
-
-    def __init__(self, *args, **kwargs):
-        parent: WorkController = args[0]
-        if not isinstance(parent.app, ADCMCelery):
-            raise TypeError("This worker step relies on ADCM Celery implementation")
-
-        super().__init__(*args, **kwargs)
-
-        # those assignments may not be required, keeping for now
-        self.hostname = parent.hostname
-        self.worker_heartbeat_interval = parent.app.conf.adcm_worker.job_worker_celery_heartbeat_interval
-        self.db_url = parent.app.conf.db_url
-
-    def start(self, parent):
-        repo.init_tables(self.db_url)
-        self._update_taskmeta_table()
-        self._start_heartbeat(work_controller=parent)
-
-    def _update_taskmeta_table(self) -> None:
-        final_status = CeleryTaskState.FAILURE
-
-        to_update = repo.retrieve_running_worker_tasks(hostname=self.hostname)
-        if to_update:
-            repo.update_worker_tasks(ids=to_update, status=final_status)
-
-        logger.debug(
-            f"Table {DBTables.taskmeta} updated: ({len(to_update)}) rows affected. "
-            f"Set {final_status} status to tasks of {self.hostname} worker."
-        )
-
-    def _start_heartbeat(self, work_controller) -> None:
-        work_controller.timer.call_repeatedly(
-            secs=self.worker_heartbeat_interval,
-            fun=repo.write_heartbeat,
-            args=(self.hostname,),
-        )
-
-        logger.debug(f"DB heartbeat started at {self.hostname} worker.")
+        self.di_container = adcm_di_container
 
 
 # kept DI function in here, because they are deeply dependant on `ADCMCelery` structure
+
+
+def read_adcm_uuid(repo: ADCMRepoI) -> str | None:
+    """Read the ADCM uuid; best-effort (``None`` on failure)."""
+    try:
+        return repo.get_uuid()
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to read ADCM uuid")
+        return None
 
 
 def container_from_argument(*args):

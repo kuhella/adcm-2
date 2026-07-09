@@ -9,16 +9,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from celery import Celery
-from core.legacy.job.runners import JobFilterPredicate, always_true
-import dishka
-
-import adcm.init_django  # noqa: F401, isort:skip
-
-from application.di.containers import get_main_providers
-
-from jobs.worker.celery.di import CeleryProvider
-
-container = dishka.make_container(CeleryProvider(), *get_main_providers(), context={JobFilterPredicate: always_true})
-app = container.get(Celery)

@@ -10,31 +10,51 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Iterable
+from typing import TypeVar
 
 from celery import Celery
-from dishka import Provider, Scope, provide
+from core.ext_utils.pydantic import represent_missing_and_others_errors_without_description
+from core.scenarios.adcm import DefaultURL
+from dishka import Container, Provider, Scope, provide
+from django.conf import settings
+from integrations.consul import ConsulBackend
+from pydantic_settings import BaseSettings
 from sqlalchemy import URL
+import pydantic
 
-# CustomWorkerStep is imported for the (currently disabled) worker-step registration below.
-from jobs.worker.celery.custom import ADCMCelery, CustomWorkerStep  # noqa: F401
+from jobs.worker.celery.bootsteps import ConsulRegistrationStep, ResultBackendTablesStep, StatusServiceUrlStep
+from jobs.worker.celery.custom import ADCMCelery
 from jobs.worker.celery.pg.transport import make_broker_url
-from jobs.worker.celery.settings import CelerySettings, EnvDBSettings, EnvWorkerSettings
+from jobs.worker.celery.settings import CelerySettings, EnvDBSettings
+
+_EnvSettingsT = TypeVar("_EnvSettingsT", bound=BaseSettings)
+
+
+class WorkerSettingsInitError(Exception):
+    ...
+
+
+def parse_settings_from_env(settings_cls: type[_EnvSettingsT], name: str) -> _EnvSettingsT:
+    try:
+        return settings_cls()
+    except pydantic.ValidationError as e:
+        message = represent_missing_and_others_errors_without_description(
+            errors=e.errors(),
+            prefix=f"Failed to retrieve {name} settings from environment.\nSummary:\n",
+        )
+        raise WorkerSettingsInitError(message) from None
 
 
 class CeleryProvider(Provider):
     scope = Scope.APP
 
     @provide
-    def di_providers(self) -> Iterable[Provider]:
-        from application.di.containers import get_main_providers
-
-        return get_main_providers()
-
-    @provide
-    def celery_settings(self) -> CelerySettings:
-        # todo silent/customize errors?
-        db = EnvDBSettings()  # pyright: ignore[reportCallIssue]
+    def celery_settings(
+        self,
+        consul_backend: ConsulBackend | None,
+        default_adcm_url: DefaultURL | None,
+    ) -> CelerySettings:
+        db = parse_settings_from_env(EnvDBSettings, "database")
         # Build via URL.create so credentials/host/db and options are properly
         # percent-encoded — a password containing @ : / ? # would otherwise
         # break URL parsing and authentication.
@@ -48,26 +68,29 @@ class CeleryProvider(Provider):
             query={key: str(value) for key, value in db.options.items()},
         ).render_as_string(hide_password=False)
 
-        worker = EnvWorkerSettings()  # pyright: ignore[reportCallIssue]
-
         return CelerySettings(
             db_url=connection_str,
             # PostgreSQL LISTEN/NOTIFY broker; control commands ride native
             # Celery pidbox over its fanout (see jobs.worker.celery.pg).
             broker_url=make_broker_url(connection_str),
             result_backend=f"db+{connection_str}",
-            adcm_worker=worker,
+            consul=consul_backend,
+            default_adcm_url=str(default_adcm_url) if default_adcm_url else None,
+            status_service_base_path=settings.STATUS_SERVICE_BASE_PATH,
         )
 
     @provide
-    def celery(self, providers: Iterable[Provider], celery_settings: CelerySettings) -> Celery:
+    def celery(self, container: Container, celery_settings: CelerySettings) -> Celery:
         app = ADCMCelery(
-            adcm_di_providers=providers,
+            adcm_di_container=container,
             adcm_settings=celery_settings,
         )
 
         app.autodiscover_tasks(packages=["jobs.worker"])
-        # worker-step registration currently disabled:
-        # app.steps["worker"].add(CustomWorkerStep)
+
+        app.steps["worker"].add(ResultBackendTablesStep)  # pyright: ignore[reportOptionalSubscript]
+        app.steps["worker"].add(StatusServiceUrlStep)  # pyright: ignore[reportOptionalSubscript]
+        if celery_settings.consul is not None:
+            app.steps["worker"].add(ConsulRegistrationStep)  # pyright: ignore[reportOptionalSubscript]
 
         return app

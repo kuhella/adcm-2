@@ -26,6 +26,8 @@ from core.types import (
 )
 from django.db import connection
 from django.db.transaction import atomic
+from django.db.utils import ProgrammingError
+from psycopg import errors as pg_errors
 
 from jobs.scheduler import repo
 from jobs.scheduler._types import CELERY_RUNNING_STATES, UTC, CeleryTaskState, TaskShortInfo, WorkerID
@@ -110,9 +112,17 @@ def retrieve_celery_task_state(worker_id: WorkerID) -> CeleryTaskState:
     fields = "status, worker"
     condition = f"task_id = '{worker_id}'"
 
-    with connection.cursor() as cursor:
-        cursor.execute(f"SELECT {fields} FROM {table} WHERE {condition};")  # noqa: S608
-        row = cursor.fetchone()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(f"SELECT {fields} FROM {table} WHERE {condition};")  # noqa: S608
+            row = cursor.fetchone()
+    except ProgrammingError as error:
+        if not isinstance(error.__cause__, pg_errors.UndefinedTable):
+            raise
+        # The table is created by the worker (ResultBackendTablesStep) / celery's result
+        # backend; it's absent only when no worker has ever run against this database,
+        # which carries the same meaning as "no row for this task".
+        row = None
 
     if not row:
         return CeleryTaskState.ADCM_UNREACHABLE
@@ -121,8 +131,11 @@ def retrieve_celery_task_state(worker_id: WorkerID) -> CeleryTaskState:
 
     status = CeleryTaskState(status_raw.upper())
 
-    if status in CELERY_RUNNING_STATES and hostname not in app.ping():
-        return CeleryTaskState.FAILURE
+    if status in CELERY_RUNNING_STATES:
+        # ping() replies look like [{"celery@host": {"ok": "pong"}}, ...]
+        alive_workers = {host for reply in app.control.ping() for host in reply}
+        if hostname not in alive_workers:
+            return CeleryTaskState.FAILURE
 
     return status
 

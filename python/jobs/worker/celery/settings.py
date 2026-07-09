@@ -13,6 +13,7 @@
 from dataclasses import dataclass
 from typing import Annotated
 
+from integrations.consul import ConsulBackend
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -30,20 +31,17 @@ class EnvDBSettings(BaseSettings):
     options: Annotated[dict, Field(default_factory=dict)]
 
 
-class EnvWorkerSettings(BaseSettings):
-    # seconds
-    job_worker_celery_heartbeat_interval: Annotated[float, Field(default=5.0)]
-
-
 @dataclass(slots=True)
 class CelerySettings:
     # Connections
     db_url: str
     broker_url: str
     result_backend: str
+    consul: ConsulBackend | None
 
     # ADCM specifics
-    adcm_worker: EnvWorkerSettings
+    default_adcm_url: str | None
+    status_service_base_path: str
 
     # Various
     result_extended: bool = True

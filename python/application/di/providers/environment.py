@@ -141,7 +141,7 @@ class EnvironmentProvider(Provider):
         """Return a Consul backend if configured, otherwise None."""
         if settings is None:
             return None
-        return ConsulBackend.initialize(settings)
+        return ConsulBackend(settings)
 
     @provide
     def ansible_vault(self, backend: secrets.SecretsBackend) -> secrets.AnsibleVault:
@@ -199,6 +199,6 @@ def parse_consul_settings_from_env() -> consul.ClientSettings | None:
     except pydantic.ValidationError as e:
         message = represent_missing_and_others_errors_without_description(
             errors=e.errors(),
-            prefix="Failed to retrieve consul settings from environment.\nSummary:\n",
+            prefix="Failed to retrieve bootsteps settings from environment.\nSummary:\n",
         )
         raise ConsulSettingsInitError(message) from None

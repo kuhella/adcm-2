@@ -62,7 +62,7 @@ def postgres() -> Generator[PostgresContainer, None, None]:
 
 @pytest.fixture(scope="session")
 def consul() -> Generator[DockerContainer, None, None]:
-    container = DockerContainer("hashicorp/consul:2.0", ports=[8500]).waiting_for(
+    container = DockerContainer("hub.arenadata.io/adcm/consul:1.0.0", ports=[8500]).waiting_for(
         LogMessageWaitStrategy("Log data will now stream in as it occurs")
     )
 

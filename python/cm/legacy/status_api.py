@@ -46,8 +46,25 @@ class EventTypes:
     UPDATE = "update_{}"
 
 
+_external_status_service_url: str | None = None
+
+
+def set_external_status_service_url(url: str) -> None:
+    global _external_status_service_url  # noqa: PLW0603
+
+    _external_status_service_url = url
+
+
+def get_status_service_url() -> str:
+    """Base status service URL
+    - in-process calls go to INTERNAL_STATUS_SERVICE_URL
+    - external components (Celery workers) calls go to external_status_service_url
+    """
+    return _external_status_service_url or settings.INTERNAL_STATUS_SERVICE_URL
+
+
 def api_request(method: str, url: str, data: dict = None) -> Response | None:
-    url = urljoin(settings.API_URL, url)
+    url = urljoin(get_status_service_url(), url)
     kwargs = {
         "headers": {
             "Content-Type": "application/json",

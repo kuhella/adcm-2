@@ -97,7 +97,7 @@ def check_consul(consul_backend: ConsulBackend | None) -> CheckResult | None:
         return None
 
     healthy = consul_backend.check_connection()
-    return CheckResult(name="consul", healthy=healthy, detail="" if healthy else "Consul is not reachable")
+    return CheckResult(name="bootsteps", healthy=healthy, detail="" if healthy else "Consul is not reachable")
 
 
 def run_readiness_checks(
