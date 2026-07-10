@@ -372,7 +372,7 @@ def _get_objects_basic_info(
     if providers := objects_in_inventory.get(ADCMCoreType.PROVIDER):
         # for actions that really rely on provider there will be always 1 provider, right?
         provider_id = next(iter(providers))
-        info = Provider.objects.values(*basic_fields, "name", "prototype__bundle_id", **basic_spec_fields).get(
+        info = Provider.objects.values(*basic_fields, "name", "uuid", "prototype__bundle_id", **basic_spec_fields).get(
             id=provider_id
         )
         host_prototype_id = Prototype.objects.values_list("id", flat=True).get(

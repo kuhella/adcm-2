@@ -84,6 +84,7 @@ class RoleRelatedSerializer(ModelSerializer):
 
 class ObjectCandidateSerializer(EmptySerializer):
     id = IntegerField()
+    uuid = CharField()
     name = CharField()
 
 
@@ -94,6 +95,7 @@ class ClusterObjectCandidateSerializer(ObjectCandidateSerializer):
 class ServiceObjectCandidateSerializer(EmptySerializer):
     name = CharField()
     display_name = CharField()
+    uuid = CharField()
     clusters = ClusterObjectCandidateSerializer(many=True)
 
 

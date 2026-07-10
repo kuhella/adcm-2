@@ -86,6 +86,7 @@ class ObjectField(JSONField):
                     "id": obj.object_id,
                     "type": obj.object.prototype.type,
                     "name": obj.object.display_name,
+                    "uuid": str(obj.object.uuid),
                 },
             )
 
@@ -104,6 +105,7 @@ class PolicyObjectField(ObjectField):
                     "name": obj.object.name,
                     "display_name": obj.object.display_name,
                     "parent_id": parent_id,
+                    "uuid": str(obj.object.uuid),
                 },
             )
 
@@ -131,6 +133,7 @@ class PolicySerializer(ModelSerializer):
 
 class SchemaPolicyObjectsField(EmptySerializer):
     id = IntegerField(min_value=1)
+    uuid = CharField(allow_null=False, allow_blank=False)
     parent_id = IntegerField(min_value=1, required=False, allow_null=True)
     type = CharField(allow_null=False, allow_blank=False)
     name = CharField(allow_null=False, allow_blank=False)

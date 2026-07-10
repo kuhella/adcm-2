@@ -232,6 +232,7 @@ class RoleViewSet(
                     {
                         "name": cluster.display_name,
                         "id": cluster.id,
+                        "uuid": str(cluster.uuid),
                     },
                 )
 
@@ -241,6 +242,7 @@ class RoleViewSet(
                     {
                         "name": provider.display_name,
                         "id": provider.id,
+                        "uuid": str(provider.uuid),
                     },
                 )
 
@@ -250,6 +252,7 @@ class RoleViewSet(
                     {
                         "name": host.display_name,
                         "id": host.id,
+                        "uuid": str(host.uuid),
                     },
                 )
 
@@ -263,6 +266,7 @@ class RoleViewSet(
                     {
                         "name": service.cluster.name,
                         "id": service.id,
+                        "uuid": str(service.cluster.uuid),
                     },
                 )
             for service, clusters_info in _services.items():
@@ -270,6 +274,7 @@ class RoleViewSet(
                     {
                         "name": service.name,
                         "display_name": service.display_name,
+                        "uuid": str(service.uuid),
                         "clusters": sorted(clusters_info, key=lambda x: x["name"]),
                     },
                 )
