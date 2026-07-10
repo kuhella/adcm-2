@@ -89,29 +89,30 @@ COPY python/ansible_collections/arenadata/adcm /usr/share/ansible/collections/an
 COPY python /adcm/python
 
 RUN ln -s -f /usr/local/bin/python3 /usr/bin/python3 && \
-    ln -s -f /usr/bin/python3 /usr/bin/python
-
-RUN ln -s /adcm/python/application/scripts/manage_secrets.py /adcm/python/manage_secrets.py
-
-RUN mkdir -p /adcm/data/log
-
-RUN DJANGO_SETTINGS_MODULE=adcm.settings_setups.build /adcm/.venv/bin/python /adcm/python/manage.py collectstatic --noinput
+    ln -s -f /usr/bin/python3 /usr/bin/python  && \
+    ln -s /tmp/.ansible /home/adcm/.ansible  && \
+    ln -s /adcm/python/application/scripts/manage_secrets.py /adcm/python/manage_secrets.py
 
 # Hand only the runtime-writable paths to the non-root user; runit supervise dirs are symlinked into the per-user
 # XDG runtime dir (/run/user/<uid>), and the enabled ssl vhost is written to /adcm/data (see make_nginx_default_config).
 #   /adcm             - code, wwwroot/static, and /adcm/data
-#   /home/adcm        - HOME; ansible writes ~/.ansible/tmp here
 #   /run/user/<uid>   - per-user runtime dir (runit supervise state); mode 0700
-RUN mkdir -p /home/adcm/.ansible "/run/user/${ADCM_UID}" && \
+RUN mkdir -p "/run/user/${ADCM_UID}" "/adcm/data/log" && \
     chmod 700 "/run/user/${ADCM_UID}" && \
     chown -R adcm:adcm \
         /adcm \
-        /home/adcm \
         "/run/user/${ADCM_UID}"
+
+RUN DJANGO_SETTINGS_MODULE=adcm.settings_setups.build /adcm/.venv/bin/python /adcm/python/manage.py collectstatic --noinput
 
 ENV PYTHONPATH=/adcm/python
 ENV HOME=/home/adcm
-
+# Everything ansible writes under ~/.ansible by default is rebased onto /tmp,
+# so HOME needs no writable mount under a read-only rootfs and the ephemeral
+# files stay off the data volume.The symlink covers `remote_tmp`
+# for connection=local plays: it always expands literally to ~/.ansible/tmp and
+# cannot be redirected globally without also breaking remote (ssh) targets.
+ENV ANSIBLE_HOME=/tmp/.ansible
 ARG ADCM_VERSION
 ENV ADCM_VERSION=$ADCM_VERSION
 EXPOSE 8000
