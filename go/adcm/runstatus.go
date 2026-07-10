@@ -14,10 +14,14 @@ package main
 
 import (
 	"adcm/config"
+	"adcm/consul"
 	"adcm/status"
 	"flag"
 	"fmt"
+	"log"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 func main() {
@@ -32,6 +36,22 @@ func main() {
 	accessTokens, err := RetrieveAccessTokensFromBackend()
 	if err != nil {
 		panic(err)
+	}
+
+	// Register with Consul if CONSUL_URL is set.
+	if cfg := consul.ConfigFromEnv(8020); cfg != nil {
+		registrar, regErr := consul.Register(cfg)
+		if regErr != nil {
+			log.Printf("[consul] Failed to register service: %v", regErr)
+		} else {
+			go func() {
+				sigCh := make(chan os.Signal, 1)
+				signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+				<-sigCh
+				registrar.Deregister()
+				os.Exit(0)
+			}()
+		}
 	}
 
 	status.Start(status.NewSecretConfig(accessTokens), *logFile, GetLogLevel())

@@ -11,15 +11,16 @@
 # limitations under the License.
 
 """
-Thin HTTP client for the Consul KV endpoints used by the custom Celery
-control/inspect transport.
+Low-level Consul HTTP client hierarchy.
 
-Recycle TCP/TLS connections instead of opening a new one for every operation.
-The client itself is a process-wide singleton;
-callers obtain it via :func:`get_consul_kv_client`.
+:class:`ConsulClient` is the base class responsible for HTTP session management,
+connection pooling, TLS/mTLS, ACL token, and datacenter configuration.
 
-TLS and ACL options are picked up from environment/settings so that both
-ACL (token) and TLS (CA file) based hardening are supported out of the box.
+:class:`ConsulKVClient` uses a :class:`ConsulClient` instance (injected) to
+perform KV-specific operations for the Celery control/inspect transport.
+
+A single process-wide :class:`ConsulClient` instance is built by
+:func:`get_consul_client` and shared across all higher-level clients.
 """
 
 from __future__ import annotations
@@ -35,20 +36,21 @@ from requests.adapters import HTTPAdapter
 from jobs.worker.celery.consul import settings as consul_settings
 
 
-class ConsulKVError(RuntimeError):
+class ConsulError(RuntimeError):
+    """Base error for Consul client operations."""
+
+
+class ConsulKVError(ConsulError):
     """Raised for any unexpected Consul KV HTTP response."""
 
 
-class ConsulKVClient:
+class ConsulClient:
     """
-    Minimal Consul KV client with pooled HTTP connections.
+    Base Consul HTTP client with pooled connections.
 
-    Only the endpoints required by the control/inspect transport are
-    exposed: :meth:`put`, :meth:`get`, :meth:`list_keys`, :meth:`list_pairs`
-    and :meth:`delete`.
+    Manages the shared HTTP session (connection pooling, TLS/mTLS, ACL token,
+    datacenter).  Passed into higher-level clients via dependency injection.
     """
-
-    _KV_PATH = "/v1/kv"
 
     def __init__(
         self,
@@ -57,6 +59,7 @@ class ConsulKVClient:
         datacenter: str | None = None,
         token: str | None = None,
         verify: str | bool = True,
+        cert: tuple[str, str] | None = None,
         timeout: float = 5.0,
         pool_size: int = 10,
     ) -> None:
@@ -68,20 +71,59 @@ class ConsulKVClient:
         if token:
             session.headers["X-Consul-Token"] = token
         session.verify = verify
-        # Reuse the same pool of TCP connections across all kv requests.
+        if cert:
+            session.cert = cert
         adapter = HTTPAdapter(pool_connections=pool_size, pool_maxsize=pool_size)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
         self._session = session
 
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    @property
+    def timeout(self) -> float:
+        return self._timeout
+
+    @property
+    def session(self) -> Session:
+        return self._session
+
+    def close(self) -> None:
+        self._session.close()
+
+    def query_params(self, **extra: str) -> dict[str, str]:
+        """Build query params dict with datacenter and any extras."""
+        params: dict[str, str] = {}
+        if self._datacenter:
+            params["dc"] = self._datacenter
+        params.update(extra)
+        return params
+
+
+class ConsulKVClient:
+    """
+    Consul KV client that uses a :class:`ConsulClient` for HTTP operations.
+
+    Only the endpoints required by the control/inspect transport are
+    exposed: :meth:`put`, :meth:`get`, :meth:`list_keys`, :meth:`list_pairs`
+    and :meth:`delete`.
+    """
+
+    _KV_PATH = "/v1/kv"
+
+    def __init__(self, client: ConsulClient) -> None:
+        self._client = client
+
     def put(self, key: str, value: Any) -> None:
         """Store ``value`` at ``key``. ``value`` is json-encoded automatically."""
-        url = f"{self._base_url}{self._KV_PATH}/{_clean(key)}"
-        response = self._session.put(
+        url = f"{self._client.base_url}{self._KV_PATH}/{_clean(key)}"
+        response = self._client.session.put(
             url,
-            params=self._query(),
+            params=self._client.query_params(),
             data=_encode_value(value),
-            timeout=self._timeout,
+            timeout=self._client.timeout,
         )
         if not response.ok or response.text.strip() != "true":
             raise ConsulKVError(
@@ -90,8 +132,8 @@ class ConsulKVClient:
 
     def get(self, key: str) -> Any | None:
         """Fetch the value at ``key`` or ``None`` if it does not exist."""
-        url = f"{self._base_url}{self._KV_PATH}/{_clean(key)}"
-        response = self._session.get(url, params=self._query(), timeout=self._timeout)
+        url = f"{self._client.base_url}{self._KV_PATH}/{_clean(key)}"
+        response = self._client.session.get(url, params=self._client.query_params(), timeout=self._client.timeout)
         if response.status_code == 404:
             return None
         if not response.ok:
@@ -105,8 +147,10 @@ class ConsulKVClient:
 
     def list_keys(self, prefix: str) -> list[str]:
         """Return the full list of keys under ``prefix`` (recursive)."""
-        url = f"{self._base_url}{self._KV_PATH}/{_clean(prefix)}"
-        response = self._session.get(url, params=self._query(keys="true"), timeout=self._timeout)
+        url = f"{self._client.base_url}{self._KV_PATH}/{_clean(prefix)}"
+        response = self._client.session.get(
+            url, params=self._client.query_params(keys="true"), timeout=self._client.timeout
+        )
         if response.status_code == 404:
             return []
         if not response.ok:
@@ -118,8 +162,10 @@ class ConsulKVClient:
 
     def list_pairs(self, prefix: str) -> dict[str, Any]:
         """Return ``{key: value}`` for every key under ``prefix`` (recursive)."""
-        url = f"{self._base_url}{self._KV_PATH}/{_clean(prefix)}"
-        response = self._session.get(url, params=self._query(recurse="true"), timeout=self._timeout)
+        url = f"{self._client.base_url}{self._KV_PATH}/{_clean(prefix)}"
+        response = self._client.session.get(
+            url, params=self._client.query_params(recurse="true"), timeout=self._client.timeout
+        )
         if response.status_code == 404:
             return {}
         if not response.ok:
@@ -131,25 +177,18 @@ class ConsulKVClient:
 
     def delete(self, key: str, *, recurse: bool = False) -> None:
         """Delete ``key`` (or everything under it when ``recurse`` is true)."""
-        url = f"{self._base_url}{self._KV_PATH}/{_clean(key)}"
-        params = self._query()
+        url = f"{self._client.base_url}{self._KV_PATH}/{_clean(key)}"
+        params = self._client.query_params()
         if recurse:
             params["recurse"] = "true"
-        response = self._session.delete(url, params=params, timeout=self._timeout)
+        response = self._client.session.delete(url, params=params, timeout=self._client.timeout)
         if not response.ok:
             raise ConsulKVError(
                 f"Failed to DELETE consul kv {key!r}: status={response.status_code} body={response.text!r}"
             )
 
     def close(self) -> None:
-        self._session.close()
-
-    def _query(self, **extra: str) -> dict[str, str]:
-        params: dict[str, str] = {}
-        if self._datacenter:
-            params["dc"] = self._datacenter
-        params.update(extra)
-        return params
+        self._client.close()
 
 
 def _encode_value(value: Any) -> bytes:
@@ -171,10 +210,14 @@ def _clean(key: str) -> str:
 
 
 __all__ = [
+    "ConsulClient",
+    "ConsulError",
     "ConsulKVClient",
     "ConsulKVError",
     "b64encode",
+    "get_consul_client",
     "get_consul_kv_client",
+    "reset_consul_client",
     "reset_consul_kv_client",
 ]
 
@@ -183,10 +226,12 @@ _client_lock = Lock()
 
 
 class _ConsulClientRegistry:
-    _instance: ClassVar[ConsulKVClient | None] = None
+    """Process-wide singleton for the base :class:`ConsulClient`."""
+
+    _instance: ClassVar[ConsulClient | None] = None
 
     @classmethod
-    def get(cls) -> ConsulKVClient:
+    def get(cls) -> ConsulClient:
         if cls._instance is not None:
             return cls._instance
         with _client_lock:
@@ -202,31 +247,67 @@ class _ConsulClientRegistry:
                 cls._instance = None
 
 
-def _build_client() -> ConsulKVClient:
+def _build_client() -> ConsulClient:
     if not consul_settings.CONSUL_URL:
-        raise ConsulKVError("CONSUL_URL is not set: Consul-based Celery control transport cannot be used.")
+        raise ConsulError("CONSUL_URL is not set: Consul client cannot be created.")
 
     verify: str | bool = True
     if consul_settings.CONSUL_CACERT_FILE:
         verify = consul_settings.CONSUL_CACERT_FILE
 
-    return ConsulKVClient(
+    cert: tuple[str, str] | None = None
+    if consul_settings.CONSUL_CLIENT_CERT_FILE and consul_settings.CONSUL_CLIENT_KEY_FILE:
+        cert = (consul_settings.CONSUL_CLIENT_CERT_FILE, consul_settings.CONSUL_CLIENT_KEY_FILE)
+
+    return ConsulClient(
         base_url=consul_settings.CONSUL_URL,
         datacenter=consul_settings.CONSUL_DATACENTER,
         token=consul_settings.CONSUL_ACL_TOKEN,
         verify=verify,
+        cert=cert,
         timeout=consul_settings.CONSUL_HTTP_TIMEOUT,
         pool_size=consul_settings.CONSUL_HTTP_POOL_SIZE,
     )
 
 
-def get_consul_kv_client() -> ConsulKVClient:
-    """
-    Return the process-wide :class:`ConsulKVClient` instance.
-    """
+def get_consul_client() -> ConsulClient:
+    """Return the process-wide :class:`ConsulClient` instance."""
     return _ConsulClientRegistry.get()
 
 
-def reset_consul_kv_client() -> None:
-    """Drop the cached client (mostly useful for tests)."""
+def reset_consul_client() -> None:
+    """Drop the cached base client (resets all dependants)."""
     _ConsulClientRegistry.reset()
+
+
+_kv_lock = Lock()
+
+
+class _ConsulKVClientRegistry:
+    """Process-wide singleton for :class:`ConsulKVClient`."""
+
+    _instance: ClassVar[ConsulKVClient | None] = None
+
+    @classmethod
+    def get(cls) -> ConsulKVClient:
+        if cls._instance is not None:
+            return cls._instance
+        with _kv_lock:
+            if cls._instance is None:
+                cls._instance = ConsulKVClient(get_consul_client())
+        return cls._instance
+
+    @classmethod
+    def reset(cls) -> None:
+        with _kv_lock:
+            cls._instance = None
+
+
+def get_consul_kv_client() -> ConsulKVClient:
+    """Return the process-wide :class:`ConsulKVClient` instance."""
+    return _ConsulKVClientRegistry.get()
+
+
+def reset_consul_kv_client() -> None:
+    """Drop the cached KV client (mostly useful for tests)."""
+    _ConsulKVClientRegistry.reset()
