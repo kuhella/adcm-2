@@ -12,9 +12,9 @@
 # limitations under the License.
 
 # Non-root periodic task runner.
-# Replaces BusyBox crond, which requires root: it setuid()s to each crontab's
-# owner per job, so when the container runs as a non-root user it schedules and
-# fires nothing.
+# Replaces the system cron daemon, which requires root: it setuid()s to each
+# crontab's owner per job, so when the container runs as a non-root user it
+# schedules and fires nothing.
 #
 # Daily jobs are stamp-based instead of exact "HH:MM" matches: a job fires on
 # the first tick at or after its scheduled time and is stamped for the day, so

@@ -55,16 +55,11 @@ That will be an image hub.adsw.io/adcm/adcm:<branch_name> as a result of the ope
 Makefile has self-documented help message. Just type.
 
 ```sh
-$ make
-buildbaseimage                 Build base image for ADCM's container. That is alpine with all packages.
-build                          Build final docker image and all depended targets except baseimage.
-buildjs                        Build client side js/html/css in directory wwwroot
-buildss                        Build status server
-clean                          Cleanup. Just a cleanup.
-describe                       Create .version file with output of describe
-help                           Shows that help
-build2js                       For new design and api v2: Build client side js/html/css in directory wwwroot
-build2                         For new design and api v2: Build final docker image and all depended targets except baseimage
+build                          Build the final docker image (RED OS based) with all its builder stages
+unittests                      Run the Python test suite against a throwaway postgres container
+pretty                         Format and autofix the Python sources
+lint                           Run the linters, type checker and license/migration checks
+version                        Print the ADCM version
 ```
 
 And check out the description for every operation available.
