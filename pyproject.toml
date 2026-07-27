@@ -39,11 +39,14 @@ dependencies = [
     "pydantic-settings>=2.13.0,<3",
     "jinja2>=3.1.6,<4",
     "pyyaml>=6.0.3,<7",
+    "ansible-core==2.16.4",
 ]
 
 [dependency-groups]
 ansible = [
-    "ansible-core==2.16.4",
+    "hvac>=2.3.0,<3",
+    "jmespath==1.1.0",
+    "lxml==6.0.2",
 ]
 celery = [
     "celery>=5.6,<6",
@@ -71,7 +74,7 @@ run = ["uwsgi>=2.0.30,<3"]
 
 [tool.uv]
 package = false
-default-groups = ["ansible", "celery"]
+default-groups = ["celery"]
 
 [build-system]
 requires = ["uv_build>=0.11.18,<0.12.0"]
